@@ -1,0 +1,6 @@
+{
+  "name": "Ring KO",
+  "description": "Juego arcade de boxeo táctico con esquivas, bloqueos, contraataques, rondas cronometradas y 4 rivales en el ring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

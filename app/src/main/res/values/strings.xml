@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">Ring KO</string>
+    <string name="hub_subtitle">NOCHE DE CAMPEONATO</string>
+    <string name="hub_quick_fight">PELEA RÁPIDA</string>
+    <string name="hub_select_rival">ELIGE TU RIVAL</string>
+    <string name="hub_session_record">RÉCORD DE SESIÓN</string>
+    <string name="hub_wins_label">VICTORIAS</string>
+    <string name="hub_kos_label">KOs</string>
+    <string name="hub_streak_label">RACHA</string>
+    <string name="btn_fight">SUBIR AL RING</string>
+    <string name="btn_settings">Ajustes</string>
+    <string name="btn_controls">Controles</string>
+    <string name="btn_pause">Pausa</string>
+    <string name="btn_resume">REANUDAR</string>
+    <string name="btn_rematch">REVANCHA</string>
+    <string name="btn_exit_ring">SALIR DEL RING</string>
+    <string name="stat_speed">Velocidad</string>
+    <string name="stat_power">Potencia</string>
+    <string name="stat_guard">Guardia</string>
+    <string name="ctrl_dodge_left">ESQUIVA IZQ</string>
+    <string name="ctrl_dodge_right">ESQUIVA DER</string>
+    <string name="ctrl_guard">GUARDIA</string>
+    <string name="ctrl_jab">JAB IZQ</string>
+    <string name="ctrl_cross">RECTO DER</string>
+    <string name="ctrl_hook">GANCHO</string>
+    <string name="ctrl_uppercut">UPPERCUT</string>
+    <string name="settings_title">AJUSTES DEL COMBATE</string>
+    <string name="settings_sound">Efectos de Sonido</string>
+    <string name="settings_sound_desc">Campana, impactos y reacción del público</string>
+    <string name="settings_haptics">Vibración Táctil</string>
+    <string name="settings_haptics_desc">Pulso al conectar golpes y bloqueos</string>
+    <string name="guide_title">GUÍA DEL RING</string>
+    <string name="close">Cerrar</string>
+</resources>

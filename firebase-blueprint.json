@@ -1,0 +1,245 @@
+{
+  "entities": {
+    "BoxerProfile": {
+      "title": "BoxerProfile",
+      "description": "Authenticated boxer career stats and equipped glove profile stored per user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the profile owner."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Boxer ring nickname shown to opponents."
+        },
+        "equippedGloveId": {
+          "type": "string",
+          "description": "Equipped glove ID from GloveShopCatalog."
+        },
+        "onlineWins": {
+          "type": "integer",
+          "description": "Total online 1v1 victories."
+        },
+        "onlineLosses": {
+          "type": "integer",
+          "description": "Total online 1v1 defeats."
+        },
+        "onlineKos": {
+          "type": "integer",
+          "description": "Total online 1v1 knockouts."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "equippedGloveId",
+        "onlineWins",
+        "onlineLosses",
+        "onlineKos",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OnlineMatch": {
+      "title": "OnlineMatch",
+      "description": "Real-time 1v1 online boxing match room and live combat state.",
+      "type": "object",
+      "properties": {
+        "roomCode": {
+          "type": "string",
+          "description": "6-character alphanumeric match code matching the document ID."
+        },
+        "hostUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the match creator (Red Corner)."
+        },
+        "guestUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the challenger (Blue Corner), omitted while waiting."
+        },
+        "participantUids": {
+          "type": "array",
+          "description": "Bounded array (1 to 2 UIDs) of match participants."
+        },
+        "hostName": {
+          "type": "string",
+          "description": "Ring nickname of the host boxer."
+        },
+        "guestName": {
+          "type": "string",
+          "description": "Ring nickname of the guest boxer, omitted while waiting."
+        },
+        "hostGloveId": {
+          "type": "string",
+          "description": "Equipped glove ID for the host boxer."
+        },
+        "guestGloveId": {
+          "type": "string",
+          "description": "Equipped glove ID for the guest boxer, omitted while waiting."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["WAITING", "ACTIVE", "FINISHED"],
+          "description": "Current lifecycle state of the online match."
+        },
+        "maxRounds": {
+          "type": "integer",
+          "description": "Configured rounds for the bout (3 or 10)."
+        },
+        "hostHp": {
+          "type": "integer",
+          "description": "Current HP of host boxer (0..200)."
+        },
+        "guestHp": {
+          "type": "integer",
+          "description": "Current HP of guest boxer (0..200)."
+        },
+        "hostStamina": {
+          "type": "integer",
+          "description": "Current stamina of host boxer (0..100)."
+        },
+        "guestStamina": {
+          "type": "integer",
+          "description": "Current stamina of guest boxer (0..100)."
+        },
+        "hostPosX": {
+          "type": "number",
+          "description": "Normalized ring lateral position of host (-1.0 to 1.0)."
+        },
+        "guestPosX": {
+          "type": "number",
+          "description": "Normalized ring lateral position of guest (-1.0 to 1.0)."
+        },
+        "hostGuarding": {
+          "type": "boolean",
+          "description": "Whether host is raising guard."
+        },
+        "guestGuarding": {
+          "type": "boolean",
+          "description": "Whether guest is raising guard."
+        },
+        "hostDodgeSeq": {
+          "type": "integer",
+          "description": "Monotonic counter for host dodges."
+        },
+        "guestDodgeSeq": {
+          "type": "integer",
+          "description": "Monotonic counter for guest dodges."
+        },
+        "hostPunchType": {
+          "type": "string",
+          "enum": ["NONE", "JAB", "CROSS", "HOOK", "UPPERCUT"],
+          "description": "Latest punch type thrown by host."
+        },
+        "guestPunchType": {
+          "type": "string",
+          "enum": ["NONE", "JAB", "CROSS", "HOOK", "UPPERCUT"],
+          "description": "Latest punch type thrown by guest."
+        },
+        "hostPunchSeq": {
+          "type": "integer",
+          "description": "Monotonic counter for host punches."
+        },
+        "guestPunchSeq": {
+          "type": "integer",
+          "description": "Monotonic counter for guest punches."
+        },
+        "hostPunchDamage": {
+          "type": "integer",
+          "description": "Scaled damage of the latest host punch."
+        },
+        "guestPunchDamage": {
+          "type": "integer",
+          "description": "Scaled damage of the latest guest punch."
+        },
+        "hostHitsLanded": {
+          "type": "integer",
+          "description": "Total punches landed by host."
+        },
+        "guestHitsLanded": {
+          "type": "integer",
+          "description": "Total punches landed by guest."
+        },
+        "hostKnockdowns": {
+          "type": "integer",
+          "description": "Times host has been knocked down."
+        },
+        "guestKnockdowns": {
+          "type": "integer",
+          "description": "Times guest has been knocked down."
+        },
+        "winnerUid": {
+          "type": "string",
+          "description": "UID of match winner when status is FINISHED."
+        },
+        "winMethod": {
+          "type": "string",
+          "enum": ["KO", "PUNTOS", "ABANDONO"],
+          "description": "Result method when status is FINISHED."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when room was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest state sync."
+        }
+      },
+      "required": [
+        "roomCode",
+        "hostUid",
+        "participantUids",
+        "hostName",
+        "hostGloveId",
+        "status",
+        "maxRounds",
+        "hostHp",
+        "guestHp",
+        "hostStamina",
+        "guestStamina",
+        "hostPosX",
+        "guestPosX",
+        "hostGuarding",
+        "guestGuarding",
+        "hostDodgeSeq",
+        "guestDodgeSeq",
+        "hostPunchType",
+        "guestPunchType",
+        "hostPunchSeq",
+        "guestPunchSeq",
+        "hostPunchDamage",
+        "guestPunchDamage",
+        "hostHitsLanded",
+        "guestHitsLanded",
+        "hostKnockdowns",
+        "guestKnockdowns",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/BoxerProfile" },
+      "description": "Owner-isolated boxer online profile and record."
+    },
+    "/online_matches/{matchId}": {
+      "schema": { "$ref": "#/entities/OnlineMatch" },
+      "description": "Real-time 1v1 online boxing matches and open lobbies."
+    }
+  }
+}

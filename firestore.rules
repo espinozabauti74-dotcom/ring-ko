@@ -1,0 +1,229 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidPunchType(p) {
+      return p in ['NONE', 'JAB', 'CROSS', 'HOOK', 'UPPERCUT'];
+    }
+
+    function isValidBoxerProfile(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string &&
+             data.displayName.size() >= 1 && data.displayName.size() <= 24 &&
+             data.equippedGloveId is string &&
+             data.equippedGloveId.size() >= 1 && data.equippedGloveId.size() <= 32 &&
+             data.onlineWins is int && data.onlineWins >= 0 && data.onlineWins <= 100000 &&
+             data.onlineLosses is int && data.onlineLosses >= 0 && data.onlineLosses <= 100000 &&
+             data.onlineKos is int && data.onlineKos >= 0 && data.onlineKos <= 100000;
+    }
+
+    function isValidOnlineMatch(data) {
+      return data.roomCode is string &&
+             data.roomCode.size() >= 4 && data.roomCode.size() <= 12 &&
+             data.hostUid is string &&
+             data.hostUid.size() >= 1 && data.hostUid.size() <= 128 &&
+             (!('guestUid' in data) || (data.guestUid is string && data.guestUid.size() >= 1 && data.guestUid.size() <= 128 && data.guestUid != data.hostUid)) &&
+             data.participantUids is list &&
+             data.participantUids.size() >= 1 && data.participantUids.size() <= 2 &&
+             data.participantUids[0] == data.hostUid &&
+             (data.participantUids.size() == 1 || (('guestUid' in data) && data.participantUids[1] == data.guestUid)) &&
+             data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 24 &&
+             (!('guestName' in data) || (data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 24)) &&
+             data.hostGloveId is string && data.hostGloveId.size() >= 1 && data.hostGloveId.size() <= 32 &&
+             (!('guestGloveId' in data) || (data.guestGloveId is string && data.guestGloveId.size() >= 1 && data.guestGloveId.size() <= 32)) &&
+             data.status in ['WAITING', 'ACTIVE', 'FINISHED'] &&
+             data.maxRounds in [3, 10] &&
+             data.hostHp is int && data.hostHp >= 0 && data.hostHp <= 250 &&
+             data.guestHp is int && data.guestHp >= 0 && data.guestHp <= 250 &&
+             data.hostStamina is int && data.hostStamina >= 0 && data.hostStamina <= 100 &&
+             data.guestStamina is int && data.guestStamina >= 0 && data.guestStamina <= 100 &&
+             data.hostPosX is number && data.hostPosX >= -1.0 && data.hostPosX <= 1.0 &&
+             data.guestPosX is number && data.guestPosX >= -1.0 && data.guestPosX <= 1.0 &&
+             data.hostGuarding is bool &&
+             data.guestGuarding is bool &&
+             data.hostDodgeSeq is int && data.hostDodgeSeq >= 0 && data.hostDodgeSeq <= 1000000 &&
+             data.guestDodgeSeq is int && data.guestDodgeSeq >= 0 && data.guestDodgeSeq <= 1000000 &&
+             isValidPunchType(data.hostPunchType) &&
+             isValidPunchType(data.guestPunchType) &&
+             data.hostPunchSeq is int && data.hostPunchSeq >= 0 && data.hostPunchSeq <= 1000000 &&
+             data.guestPunchSeq is int && data.guestPunchSeq >= 0 && data.guestPunchSeq <= 1000000 &&
+             data.hostPunchDamage is int && data.hostPunchDamage >= 0 && data.hostPunchDamage <= 120 &&
+             data.guestPunchDamage is int && data.guestPunchDamage >= 0 && data.guestPunchDamage <= 120 &&
+             data.hostHitsLanded is int && data.hostHitsLanded >= 0 && data.hostHitsLanded <= 10000 &&
+             data.guestHitsLanded is int && data.guestHitsLanded >= 0 && data.guestHitsLanded <= 10000 &&
+             data.hostKnockdowns is int && data.hostKnockdowns >= 0 && data.hostKnockdowns <= 100 &&
+             data.guestKnockdowns is int && data.guestKnockdowns >= 0 && data.guestKnockdowns <= 100 &&
+             (!('winnerUid' in data) || (data.winnerUid is string && data.winnerUid in data.participantUids)) &&
+             (!('winMethod' in data) || (data.winMethod in ['KO', 'PUNTOS', 'ABANDONO']));
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'displayName', 'equippedGloveId',
+                         'onlineWins', 'onlineLosses', 'onlineKos',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'equippedGloveId',
+                         'onlineWins', 'onlineLosses', 'onlineKos',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidBoxerProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidBoxerProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'equippedGloveId',
+                         'onlineWins', 'onlineLosses', 'onlineKos',
+                         'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+    }
+
+    match /online_matches/{matchId} {
+      allow get: if isSignedIn() &&
+                    isValidId(matchId) &&
+                    (existing().status == 'WAITING' || request.auth.uid in existing().participantUids);
+
+      allow list: if isSignedIn() &&
+                     (existing().status == 'WAITING' || request.auth.uid in existing().participantUids);
+
+      allow create: if isSignedIn() &&
+                       isValidId(matchId) &&
+                       matchId.matches('^[A-Z0-9]{4,12}$') &&
+                       incoming().roomCode == matchId &&
+                       incoming().hostUid == request.auth.uid &&
+                       incoming().status == 'WAITING' &&
+                       !('guestUid' in incoming()) &&
+                       !('guestName' in incoming()) &&
+                       !('guestGloveId' in incoming()) &&
+                       !('winnerUid' in incoming()) &&
+                       !('winMethod' in incoming()) &&
+                       incoming().participantUids == [request.auth.uid] &&
+                       incoming().keys().hasAll([
+                         'roomCode', 'hostUid', 'participantUids', 'hostName', 'hostGloveId',
+                         'status', 'maxRounds',
+                         'hostHp', 'guestHp', 'hostStamina', 'guestStamina',
+                         'hostPosX', 'guestPosX', 'hostGuarding', 'guestGuarding',
+                         'hostDodgeSeq', 'guestDodgeSeq',
+                         'hostPunchType', 'guestPunchType', 'hostPunchSeq', 'guestPunchSeq',
+                         'hostPunchDamage', 'guestPunchDamage',
+                         'hostHitsLanded', 'guestHitsLanded',
+                         'hostKnockdowns', 'guestKnockdowns',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'roomCode', 'hostUid', 'participantUids', 'hostName', 'hostGloveId',
+                         'status', 'maxRounds',
+                         'hostHp', 'guestHp', 'hostStamina', 'guestStamina',
+                         'hostPosX', 'guestPosX', 'hostGuarding', 'guestGuarding',
+                         'hostDodgeSeq', 'guestDodgeSeq',
+                         'hostPunchType', 'guestPunchType', 'hostPunchSeq', 'guestPunchSeq',
+                         'hostPunchDamage', 'guestPunchDamage',
+                         'hostHitsLanded', 'guestHitsLanded',
+                         'hostKnockdowns', 'guestKnockdowns',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidOnlineMatch(incoming());
+
+      allow update: if isSignedIn() &&
+                       existing().status != 'FINISHED' &&
+                       incoming().roomCode == existing().roomCode &&
+                       incoming().hostUid == existing().hostUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().maxRounds == existing().maxRounds &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidOnlineMatch(incoming()) &&
+                       (
+                         (
+                           existing().status == 'WAITING' &&
+                           !('guestUid' in existing()) &&
+                           request.auth.uid != existing().hostUid &&
+                           incoming().guestUid == request.auth.uid &&
+                           incoming().status == 'ACTIVE' &&
+                           incoming().participantUids == [existing().hostUid, request.auth.uid] &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'guestUid', 'guestName', 'guestGloveId', 'participantUids', 'status', 'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           existing().status == 'ACTIVE' &&
+                           request.auth.uid == existing().hostUid &&
+                           incoming().status == 'ACTIVE' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'hostHp', 'hostStamina', 'hostPosX', 'hostGuarding', 'hostDodgeSeq',
+                             'hostPunchType', 'hostPunchSeq', 'hostPunchDamage',
+                             'hostHitsLanded', 'hostKnockdowns', 'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           existing().status == 'ACTIVE' &&
+                           ('guestUid' in existing()) &&
+                           request.auth.uid == existing().guestUid &&
+                           incoming().status == 'ACTIVE' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'guestHp', 'guestStamina', 'guestPosX', 'guestGuarding', 'guestDodgeSeq',
+                             'guestPunchType', 'guestPunchSeq', 'guestPunchDamage',
+                             'guestHitsLanded', 'guestKnockdowns', 'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           existing().status == 'ACTIVE' &&
+                           request.auth.uid in existing().participantUids &&
+                           incoming().status == 'FINISHED' &&
+                           ('winnerUid' in incoming()) &&
+                           ('winMethod' in incoming()) &&
+                           incoming().winnerUid in existing().participantUids &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'hostHp', 'guestHp', 'hostKnockdowns', 'guestKnockdowns',
+                             'status', 'winnerUid', 'winMethod', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if isSignedIn() &&
+                       isValidId(matchId) &&
+                       existing().status == 'WAITING' &&
+                       existing().hostUid == request.auth.uid;
+    }
+  }
+}
