@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,13 +43,13 @@ import com.example.online.OnlineFightScreen
 import com.example.online.OnlineFightViewModel
 import com.example.online.OnlineRepository
 import com.example.online.attemptAutoSignIn
-import com.example.online.authStateFlow
 import com.example.ui.fight.FightScreen
 import com.example.ui.hub.HubScreen
 import com.example.ui.theme.ArenaObsidian
 import com.example.ui.theme.RingKoTheme
 import com.example.ui.versus.VersusScreen
 import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 
 object AppRoutes {
@@ -84,13 +87,21 @@ fun RingKoApp(
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
     val auth = remember { Firebase.auth }
-    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+    var currentUser by remember { mutableStateOf(auth.currentUser) }
+
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUser = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
 
     LaunchedEffect(Unit) {
         attemptAutoSignIn(
             context = context,
             credentialManager = credentialManager,
-            onAuthSuccess = {},
+            onAuthSuccess = { currentUser = auth.currentUser },
             onUnauthenticated = {},
             scope = scope
         )
@@ -112,6 +123,7 @@ fun RingKoApp(
                 sessionRecord = sessionRecord,
                 economy = economy,
                 settings = settings,
+                onAuthSuccess = { currentUser = auth.currentUser },
                 onStartFight = { fighterId ->
                     navController.navigate(AppRoutes.fightRoute(fighterId)) {
                         launchSingleTop = true
@@ -209,7 +221,7 @@ fun RingKoApp(
                         .background(ArenaObsidian)
                         .padding(24.dp)
                 ) {
-                    GoogleSignInGateCard(onAuthSuccess = {})
+                    GoogleSignInGateCard(onAuthSuccess = { currentUser = auth.currentUser })
                 }
             } else {
                 val uid = user.uid

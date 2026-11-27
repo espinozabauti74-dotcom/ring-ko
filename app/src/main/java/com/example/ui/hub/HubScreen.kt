@@ -58,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,6 +101,7 @@ fun HubScreen(
     sessionRecord: SessionRecord,
     economy: PlayerEconomy,
     settings: UserSettings,
+    onAuthSuccess: () -> Unit,
     onStartFight: (String) -> Unit,
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit,
@@ -108,8 +110,8 @@ fun HubScreen(
     onToggleSound: (Boolean) -> Unit,
     onToggleHaptics: (Boolean) -> Unit
 ) {
-    var activeTab by remember { mutableIntStateOf(0) } // 0 = Combate, 1 = 1v1 Local, 2 = Tienda
-    var selectedFighterId by remember { mutableStateOf(FighterRoster.fighters.first().id) }
+    var activeTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Combate, 1 = Versus, 2 = Tienda
+    var selectedFighterId by rememberSaveable { mutableStateOf(FighterRoster.fighters.first().id) }
     var showSettings by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
     var showEditName by remember { mutableStateOf(false) }
@@ -332,6 +334,7 @@ fun HubScreen(
                     currentUser = currentUser,
                     player1Name = settings.playerName,
                     equippedGloveId = economy.equippedGloveId,
+                    onAuthSuccess = onAuthSuccess,
                     onStartVersus = onStartVersus,
                     onEnterOnlineMatch = onEnterOnlineMatch
                 )
@@ -1060,12 +1063,13 @@ private fun MultiplayerHubTab(
     currentUser: FirebaseUser?,
     player1Name: String,
     equippedGloveId: String,
+    onAuthSuccess: () -> Unit,
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit
 ) {
-    var isOnlineMode by remember { mutableStateOf(true) }
-    var player2Name by remember { mutableStateOf("Jugador 2") }
-    var selectedRounds by remember { mutableIntStateOf(3) }
+    var isOnlineMode by rememberSaveable { mutableStateOf(true) }
+    var player2Name by rememberSaveable { mutableStateOf("Jugador 2") }
+    var selectedRounds by rememberSaveable { mutableIntStateOf(3) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -1113,6 +1117,7 @@ private fun MultiplayerHubTab(
                 currentUser = currentUser,
                 playerName = player1Name,
                 equippedGloveId = equippedGloveId,
+                onAuthSuccess = onAuthSuccess,
                 onEnterOnlineMatch = onEnterOnlineMatch
             )
             return

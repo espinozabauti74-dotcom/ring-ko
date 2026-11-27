@@ -3,6 +3,7 @@ package com.example.online
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.MutableContextWrapper
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +74,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
+    trySend(currentUser)
     val listener = FirebaseAuth.AuthStateListener { auth ->
         trySend(auth.currentUser)
     }
@@ -122,8 +124,9 @@ fun attemptAutoSignIn(
         .build()
     scope.launch {
         try {
-            val activityContext: Context = context.findActivity() ?: context
-            val cred = credentialManager.getCredential(activityContext, request).credential
+            val activity = context.findActivity()
+            val targetContext: Context = if (activity != null) MutableContextWrapper(activity) else context
+            val cred = credentialManager.getCredential(targetContext, request).credential
             if (signInWithGoogleCredential(cred)) {
                 onAuthSuccess()
             } else {
@@ -135,19 +138,13 @@ fun attemptAutoSignIn(
     }
 }
 
-/**
- * Interactive one-tap sign-in: first queries all Google accounts already present on the device
- * via GetGoogleIdOption(filterByAuthorizedAccounts = false) for effortless 1-tap selection,
- * and falls back to GetSignInWithGoogleOption if no cached device accounts are returned.
- * Each GetCredentialRequest carries strictly one credential option.
- */
 fun onGoogleSignInClicked(
     context: Context,
     credentialManager: CredentialManager,
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
-    onAuthCancelled: () -> Unit = {},
+    onAuthCancelled: (String?) -> Unit = {},
     forceAccountPickerDialog: Boolean = false
 ) {
     val clientId = try {
@@ -163,30 +160,33 @@ fun onGoogleSignInClicked(
             onAuthError("No se encontró la pantalla activa para iniciar sesión.")
             return@launch
         }
+        val uiContext = MutableContextWrapper(activity)
 
         if (!forceAccountPickerDialog) {
             val deviceAccountsOption = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
                 .setServerClientId(clientId)
-                .setAutoSelectEnabled(true)
+                .setAutoSelectEnabled(false)
                 .build()
             val oneTapRequest = GetCredentialRequest.Builder()
                 .addCredentialOption(deviceAccountsOption)
                 .build()
             try {
-                val cred = credentialManager.getCredential(activity, oneTapRequest).credential
+                val cred = credentialManager.getCredential(uiContext, oneTapRequest).credential
                 if (signInWithGoogleCredential(cred)) {
                     onAuthSuccess()
                 } else {
-                    onAuthError("Tipo de credencial inesperado.")
+                    onAuthError("Tipo de credencial inesperado al validar tu cuenta.")
                 }
                 return@launch
             } catch (e: GetCredentialCancellationException) {
                 Log.w("Auth", "Google One-Tap cancelled or dismissed: ${e.message}", e)
-                onAuthCancelled()
+                onAuthCancelled(
+                    "No se completó el inicio de sesión. Toca 'ELEGIR CUENTA DE GOOGLE' otra vez o usa 'Usar o agregar otra cuenta'."
+                )
                 return@launch
             } catch (_: NoCredentialException) {
-                // Fall through cleanly to the explicit Sign In With Google sheet below
+                // Fall through to explicit Sign In With Google sheet below
             } catch (e: Exception) {
                 Log.w("Auth", "Device account picker unavailable, falling back to SignInWithGoogle: ${e.message}")
             }
@@ -197,15 +197,17 @@ fun onGoogleSignInClicked(
             .addCredentialOption(signInOption)
             .build()
         try {
-            val cred = credentialManager.getCredential(activity, buttonRequest).credential
+            val cred = credentialManager.getCredential(uiContext, buttonRequest).credential
             if (signInWithGoogleCredential(cred)) {
                 onAuthSuccess()
             } else {
-                onAuthError("Tipo de credencial inesperado.")
+                onAuthError("Tipo de credencial inesperado al validar tu cuenta.")
             }
         } catch (e: GetCredentialCancellationException) {
             Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
-            onAuthCancelled()
+            onAuthCancelled(
+                "El inicio de sesión fue cancelado o no se completó en Google. Inténtalo de nuevo."
+            )
         } catch (e: Exception) {
             Log.e("Auth", "Google Sign-In failed", e)
             onAuthError(e.localizedMessage ?: "No se pudo iniciar sesión con Google.")
@@ -314,8 +316,9 @@ fun GoogleSignInGateCard(
                             errorMessage = msg
                         },
                         scope = scope,
-                        onAuthCancelled = {
+                        onAuthCancelled = { msg ->
                             isLoading = false
+                            errorMessage = msg
                         },
                         forceAccountPickerDialog = false
                     )
@@ -372,8 +375,9 @@ fun GoogleSignInGateCard(
                             errorMessage = msg
                         },
                         scope = scope,
-                        onAuthCancelled = {
+                        onAuthCancelled = { msg ->
                             isLoading = false
+                            errorMessage = msg
                         },
                         forceAccountPickerDialog = true
                     )

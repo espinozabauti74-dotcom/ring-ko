@@ -73,6 +73,7 @@ fun OnlineLobbySection(
     currentUser: FirebaseUser?,
     playerName: String,
     equippedGloveId: String,
+    onAuthSuccess: () -> Unit,
     onEnterOnlineMatch: (String) -> Unit
 ) {
     if (currentUser == null) {
@@ -81,7 +82,7 @@ fun OnlineLobbySection(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
         ) {
-            GoogleSignInGateCard(onAuthSuccess = {})
+            GoogleSignInGateCard(onAuthSuccess = onAuthSuccess)
         }
         return
     }
