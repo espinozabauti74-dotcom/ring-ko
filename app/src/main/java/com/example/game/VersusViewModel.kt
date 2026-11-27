@@ -161,6 +161,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
         )
         soundEngine.playPresentationFanfare()
         soundEngine.playCrowdCheer(0.75f)
+        soundEngine.announceReferee("$cleanP1 contra $cleanP2, ¡combate a $maxRounds rounds!")
         startLoop()
     }
 
@@ -174,17 +175,21 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
         loopJob = null
         p1MoveX = 0f
         p2MoveX = 0f
+        soundEngine.stopReferee()
     }
 
     fun togglePause() {
         _uiState.update { curr ->
             when (curr.phase) {
-                FightPhase.FIGHTING, FightPhase.INTRO, FightPhase.PRESENTATION -> curr.copy(
-                    phase = FightPhase.PAUSED,
-                    previousPhaseBeforePause = curr.phase,
-                    p1 = curr.p1.copy(isGuarding = false),
-                    p2 = curr.p2.copy(isGuarding = false)
-                )
+                FightPhase.FIGHTING, FightPhase.INTRO, FightPhase.PRESENTATION -> {
+                    soundEngine.stopReferee()
+                    curr.copy(
+                        phase = FightPhase.PAUSED,
+                        previousPhaseBeforePause = curr.phase,
+                        p1 = curr.p1.copy(isGuarding = false),
+                        p2 = curr.p2.copy(isGuarding = false)
+                    )
+                }
                 FightPhase.PAUSED -> curr.copy(phase = curr.previousPhaseBeforePause)
                 else -> curr
             }
@@ -204,6 +209,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
 
         if (held && !boxer.isGuarding) {
             if (playerIndex == 1) p1GuardStartMs = totalElapsedMs else p2GuardStartMs = totalElapsedMs
+            soundEngine.playGuardUp()
         }
         updateBoxer(playerIndex) { it.copy(isGuarding = held) }
     }
@@ -224,7 +230,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
                 stamina = (it.stamina - 8f).coerceAtLeast(0f)
             )
         }
-        soundEngine.playWhoosh()
+        soundEngine.playDodge(perfect = false)
     }
 
     fun throwPunch(playerIndex: Int, punch: PunchType) {
@@ -255,7 +261,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
                 stamina = (it.stamina - punch.staminaCost).coerceAtLeast(0f)
             )
         }
-        soundEngine.playWhoosh()
+        soundEngine.playPunchThrow(punch)
     }
 
     private fun startLoop() {
@@ -304,6 +310,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
                 introMs -= dtMs
                 if (introMs <= 480L && _uiState.value.introText != "¡BOX!") {
                     _uiState.update { it.copy(introText = "¡BOX!") }
+                    soundEngine.announceReferee("¡Box!")
                 }
                 if (introMs <= 0L) {
                     _uiState.update { it.copy(phase = FightPhase.FIGHTING, introText = "") }
@@ -352,6 +359,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
         soundEngine.playBell(doubleRing = false)
+        soundEngine.announceReferee("Round $roundNum")
     }
 
     private fun tickFighting(dtMs: Long) {
@@ -462,7 +470,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
         if (defender.isDodging) {
             updateBoxer(defenderIndex) { it.copy(counterWindowMs = 1100L) }
             addCallout("¡ESQUIVA!", CalloutTone.EMERALD, impactXNorm, 0.42f)
-            soundEngine.playWhoosh()
+            soundEngine.playDodge(perfect = true)
             return
         }
 
@@ -480,7 +488,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
                 updateBoxer(defenderIndex) { it.copy(hp = (it.hp - chip).coerceAtLeast(0f), hitFlash = 0.25f) }
                 updateBoxer(attackerIndex) { it.copy(comboCount = 0) }
                 addCallout("BLOQUEO", CalloutTone.COBALT, impactXNorm, 0.44f)
-                soundEngine.playBlock(perfectParry = false)
+                soundEngine.playBlock(perfectParry = false, heavy = punch != PunchType.JAB)
             }
             return
         }
@@ -525,13 +533,18 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
         }
         addCallout(text, tone, impactXNorm, 0.42f)
         addSparks(impactXNorm, 0.50f, tone, if (isCounter) 12 else 7)
-        soundEngine.playImpact(heavy = isCounter || punch != PunchType.JAB, counter = isCounter)
+        if (brokeGuard) {
+            soundEngine.playGuardBreak()
+        } else {
+            soundEngine.playImpact(heavy = isCounter || punch != PunchType.JAB, counter = isCounter, punchType = punch)
+        }
 
         if (nextDefenderHp <= 0f) {
             updateBoxer(attackerIndex) { it.copy(knockdownsScored = it.knockdownsScored + 1) }
             updateBoxer(defenderIndex) { it.copy(isKnockedDown = true) }
             soundEngine.playKnockdown()
             soundEngine.playCrowdCheer(1.0f)
+            soundEngine.announceReferee("¡Nocaut! ¡Ganador, ${attacker.name}!")
             loopJob?.cancel()
             _uiState.update {
                 it.copy(
@@ -565,6 +578,8 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
                 state.p1.hp >= state.p2.hp -> 1
                 else -> 2
             }
+            val winnerName = if (winner == 1) state.p1.name else state.p2.name
+            soundEngine.announceReferee("¡Decisión por puntos! ¡Ganador, $winnerName!")
             _uiState.update {
                 it.copy(
                     phase = FightPhase.MATCH_OVER,
@@ -575,6 +590,7 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
             }
         } else {
             roundOverMs = 1900L
+            soundEngine.announceReferee("¡Fin del round ${state.round}!")
             _uiState.update {
                 it.copy(
                     phase = FightPhase.ROUND_OVER,

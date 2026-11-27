@@ -226,7 +226,9 @@ class WifiFightViewModel(
         rounds: Int
     ) {
         presentationRemainingMs = 2600L
-        if (soundEnabled()) soundEngine.playPresentationFanfare()
+        syncSoundPrefs()
+        soundEngine.playPresentationFanfare()
+        soundEngine.announceReferee("${_uiState.value.myName} contra ${oppProfile.name}, ¡combate a $rounds rounds!")
         _uiState.update {
             it.copy(
                 phase = OnlineBoutPhase.PRESENTATION,
@@ -253,7 +255,9 @@ class WifiFightViewModel(
             "START" -> {
                 if (_uiState.value.phase == OnlineBoutPhase.PRESENTATION) {
                     presentationRemainingMs = 0L
-                    if (soundEnabled()) soundEngine.playBell()
+                    syncSoundPrefs()
+                    soundEngine.playBell()
+                    soundEngine.announceReferee("¡Round 1, peleen!")
                     triggerCallout("¡A PELEAR!", CalloutTone.GOLD)
                     _uiState.update { it.copy(phase = OnlineBoutPhase.FIGHTING, roundTimeMs = 35_000L) }
                 }
@@ -338,7 +342,8 @@ class WifiFightViewModel(
     ) {
         oppPunchElapsedMs = 0L
         _uiState.update { it.copy(oppActivePunch = punch, oppPunchProgress = 0.05f) }
-        if (soundEnabled()) soundEngine.playWhoosh()
+        syncSoundPrefs()
+        soundEngine.playPunchThrow(punch)
 
         val s = _uiState.value
         if (s.phase != OnlineBoutPhase.FIGHTING) return
@@ -348,6 +353,7 @@ class WifiFightViewModel(
 
         if (dodgeRemainingMs > 0L) {
             triggerCallout("¡ESQUIVA PERFECTA!", CalloutTone.EMERALD)
+            soundEngine.playDodge(perfect = true)
             _uiState.update {
                 it.copy(
                     counterWindowMs = 750L,
@@ -362,7 +368,7 @@ class WifiFightViewModel(
             val parryWindow = (now - guardStartTimeMs) <= 280L
             if (parryWindow) {
                 triggerCallout("¡PARRY! CONTRA 2x", CalloutTone.GOLD)
-                if (soundEnabled()) soundEngine.playBlock(perfectParry = true)
+                soundEngine.playBlock(perfectParry = true)
                 _uiState.update {
                     it.copy(
                         counterWindowMs = 900L,
@@ -372,7 +378,7 @@ class WifiFightViewModel(
             } else {
                 val chip = (damage * (0.24f - s.myGlove.guardAbsorptionBonus)).coerceAtLeast(1f)
                 val nextHp = (s.myHp - chip).coerceAtLeast(1f)
-                if (soundEnabled()) soundEngine.playBlock()
+                soundEngine.playBlock(perfectParry = false, heavy = punch != PunchType.JAB)
                 _uiState.update { it.copy(myHp = nextHp, hitFlashAlpha = 0.25f) }
                 sendState()
             }
@@ -380,9 +386,7 @@ class WifiFightViewModel(
         }
 
         val nextHp = (s.myHp - damage).coerceAtLeast(0f)
-        soundEngine.soundEnabled = soundEnabled()
-        soundEngine.hapticsEnabled = hapticsEnabled()
-        soundEngine.playImpact(heavy = damage >= 15f)
+        soundEngine.playImpact(heavy = damage >= 15f, punchType = punch)
 
         _uiState.update {
             it.copy(
@@ -424,7 +428,9 @@ class WifiFightViewModel(
             OnlineBoutPhase.PRESENTATION -> {
                 presentationRemainingMs -= dt
                 if (presentationRemainingMs <= 0L) {
-                    if (soundEnabled()) soundEngine.playBell()
+                    syncSoundPrefs()
+                    soundEngine.playBell()
+                    soundEngine.announceReferee("¡Round 1, peleen!")
                     triggerCallout("¡ROUND 1 — PELEEN!", CalloutTone.GOLD)
                     _uiState.update { it.copy(phase = OnlineBoutPhase.FIGHTING, roundTimeMs = 35_000L) }
                 }
@@ -471,7 +477,9 @@ class WifiFightViewModel(
                     if (s.currentRound < s.maxRounds) {
                         nextRound += 1
                         nextRoundTime = 35_000L
-                        if (soundEnabled()) soundEngine.playBell()
+                        syncSoundPrefs()
+                        soundEngine.playBell()
+                        soundEngine.announceReferee("¡Round $nextRound!")
                         triggerCallout("¡ROUND $nextRound!", CalloutTone.GOLD)
                     } else {
                         finishByPoints()
@@ -510,7 +518,9 @@ class WifiFightViewModel(
     fun skipPresentation() {
         if (_uiState.value.phase == OnlineBoutPhase.PRESENTATION) {
             presentationRemainingMs = 0L
-            if (soundEnabled()) soundEngine.playBell()
+            syncSoundPrefs()
+            soundEngine.playBell()
+            soundEngine.announceReferee("¡Round 1, peleen!")
             triggerCallout("¡A PELEAR!", CalloutTone.GOLD)
             _uiState.update { it.copy(phase = OnlineBoutPhase.FIGHTING, roundTimeMs = 35_000L) }
             transport.sendJson(JSONObject().apply { put("type", "START") })
@@ -527,7 +537,11 @@ class WifiFightViewModel(
     fun setGuard(active: Boolean) {
         val s = _uiState.value
         if (s.phase != OnlineBoutPhase.FIGHTING) return
-        if (active && !s.myGuarding) guardStartTimeMs = System.currentTimeMillis()
+        if (active && !s.myGuarding) {
+            guardStartTimeMs = System.currentTimeMillis()
+            syncSoundPrefs()
+            soundEngine.playGuardUp()
+        }
         _uiState.update { it.copy(myGuarding = active) }
         sendState()
     }
@@ -537,7 +551,8 @@ class WifiFightViewModel(
         if (s.phase != OnlineBoutPhase.FIGHTING || dodgeRemainingMs > 0L || s.myStamina < 12f) return
         dodgeRemainingMs = 360L
         myDodgeSeq += 1L
-        if (soundEnabled()) soundEngine.playWhoosh()
+        syncSoundPrefs()
+        soundEngine.playDodge(perfect = false)
         _uiState.update { it.copy(myStamina = (it.myStamina - 12f).coerceAtLeast(0f), myDodging = true) }
         sendState()
     }
@@ -559,12 +574,14 @@ class WifiFightViewModel(
 
         myPunchElapsedMs = 0L
         myPunchSeq += 1L
-        soundEngine.soundEnabled = soundEnabled()
-        soundEngine.hapticsEnabled = hapticsEnabled()
+        syncSoundPrefs()
+        soundEngine.playPunchThrow(punch)
         if (inRange && !s.oppDodging) {
-            soundEngine.playImpact(heavy = punch.damage >= 16f, counter = isCounter)
-        } else {
-            soundEngine.playWhoosh()
+            if (s.oppGuarding && punch.breaksGuardFactor < 0.5f) {
+                soundEngine.playBlock(perfectParry = false, heavy = punch != PunchType.JAB)
+            } else {
+                soundEngine.playImpact(heavy = punch.damage >= 16f, counter = isCounter, punchType = punch)
+            }
         }
 
         _uiState.update {
@@ -603,9 +620,13 @@ class WifiFightViewModel(
         loopJob?.cancel()
         val isHost = _uiState.value.isHost
         val won = (winnerRole == "HOST" && isHost) || (winnerRole == "GUEST" && !isHost)
-        if (soundEnabled()) {
-            if (won) soundEngine.playCrowdCheer() else soundEngine.playBell()
-        }
+        syncSoundPrefs()
+        if (method == "KO") soundEngine.playKnockdown()
+        soundEngine.playBell(doubleRing = true)
+        if (won) soundEngine.playCrowdCheer()
+        val winnerName = if (won) _uiState.value.myName else _uiState.value.oppName
+        val verdict = if (method == "KO") "¡Nocaut! ¡Victoria para $winnerName!" else "¡Decisión por puntos! ¡Ganador, $winnerName!"
+        soundEngine.announceReferee(verdict)
         _uiState.update {
             it.copy(
                 phase = OnlineBoutPhase.FINISHED,
@@ -679,15 +700,22 @@ class WifiFightViewModel(
         _uiState.update { it.copy(calloutText = text, calloutTone = tone) }
     }
 
+    private fun syncSoundPrefs() {
+        soundEngine.soundEnabled = soundEnabled()
+        soundEngine.hapticsEnabled = hapticsEnabled()
+    }
+
     fun stopMatch() {
         loopJob?.cancel()
         loopJob = null
         moveDir = 0f
+        soundEngine.stopReferee()
         transport.close()
     }
 
     override fun onCleared() {
         super.onCleared()
         stopMatch()
+        soundEngine.release()
     }
 }

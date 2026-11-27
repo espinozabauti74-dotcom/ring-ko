@@ -26,9 +26,12 @@
     <string name="ctrl_uppercut">UPPERCUT</string>
     <string name="settings_title">AJUSTES DEL COMBATE</string>
     <string name="settings_sound">Efectos de Sonido</string>
-    <string name="settings_sound_desc">Campana, impactos y reacción del público</string>
+    <string name="settings_sound_desc">Campana, golpes, esquivas, bloqueos y voz del árbitro</string>
     <string name="settings_haptics">Vibración Táctil</string>
     <string name="settings_haptics_desc">Pulso al conectar golpes y bloqueos</string>
     <string name="guide_title">GUÍA DEL RING</string>
     <string name="close">Cerrar</string>
+    <string name="tab_chats">CHATS</string>
+    <string name="chat_section_title">CHATS ONLINE POR CÓDIGO</string>
+    <string name="chat_no_account_badge">SIN CUENTA</string>
 </resources>

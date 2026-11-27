@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
@@ -83,6 +84,8 @@ import com.example.model.GloveItem
 import com.example.model.GloveShopCatalog
 import com.example.model.PlayerEconomy
 import com.example.model.SessionRecord
+import com.example.chat.ChatLobbySection
+import com.example.chat.ChatRoomUiState
 import com.example.online.OnlineLobbySection
 import com.example.wifi.WifiLobbySection
 import com.example.ui.components.FighterAvatarBadge
@@ -106,19 +109,30 @@ fun HubScreen(
     economy: PlayerEconomy,
     settings: UserSettings,
     appearance: BoxerAppearance,
+    chatRoomState: ChatRoomUiState,
     onAuthSuccess: () -> Unit,
     onStartFight: (String) -> Unit,
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit,
     onHostWifiMatch: (Int, String) -> Unit,
     onJoinWifiMatch: (String, Int, String) -> Unit,
+    onCreateChatRoom: (String) -> Unit,
+    onJoinChatRoom: (String) -> Unit,
+    onLeaveChatRoom: () -> Unit,
+    onSendChatMessage: (String) -> Unit,
+    onSelectChatCharacter: (String) -> Unit,
+    onSelectChatRounds: (Int) -> Unit,
+    onSendChatChallenge: (String?, String?) -> Unit,
+    onCancelChatChallenge: () -> Unit,
+    onAcceptChatChallenge: () -> Unit,
+    onDeclineChatChallenge: () -> Unit,
     onBuyOrEquipGlove: (GloveItem) -> Unit,
     onUpdateAppearance: (BoxerAppearance) -> Unit,
     onSavePlayerName: (String) -> Unit,
     onToggleSound: (Boolean) -> Unit,
     onToggleHaptics: (Boolean) -> Unit
 ) {
-    var activeTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Combate, 1 = Versus, 2 = Skins, 3 = Tienda
+    var activeTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Combate, 1 = Versus, 2 = Chats, 3 = Skins, 4 = Tienda
     var selectedFighterId by rememberSaveable { mutableStateOf(FighterRoster.fighters.first().id) }
     var showSettings by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
@@ -234,7 +248,7 @@ fun HubScreen(
                             border = BorderStroke(1.dp, ChampionshipGold.copy(alpha = 0.65f)),
                             shape = RoundedCornerShape(999.dp),
                             modifier = Modifier
-                                .clickable { activeTab = 3 }
+                                .clickable { activeTab = 4 }
                                 .testTag("coins_badge")
                         ) {
                             Row(
@@ -288,12 +302,12 @@ fun HubScreen(
                 }
             }
 
-            // Segmented Main Menu Navigation (Combate / Versus / Skins / Tienda)
+            // Segmented Main Menu Navigation (Combate / Versus / Chats / Skins / Tienda)
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = 16.dp)
             ) {
                 MenuTabButton(
                     label = "COMBATE",
@@ -316,10 +330,20 @@ fun HubScreen(
                         .testTag("tab_versus")
                 )
                 MenuTabButton(
-                    label = "SKINS",
-                    icon = Icons.Default.Palette,
+                    label = stringResource(R.string.tab_chats),
+                    icon = Icons.AutoMirrored.Filled.Chat,
                     selected = activeTab == 2,
                     onClick = { activeTab = 2 },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp)
+                        .testTag("tab_chats")
+                )
+                MenuTabButton(
+                    label = "SKINS",
+                    icon = Icons.Default.Palette,
+                    selected = activeTab == 3,
+                    onClick = { activeTab = 3 },
                     modifier = Modifier
                         .weight(1f)
                         .height(54.dp)
@@ -328,8 +352,8 @@ fun HubScreen(
                 MenuTabButton(
                     label = "TIENDA",
                     icon = Icons.Default.ShoppingBag,
-                    selected = activeTab == 3,
-                    onClick = { activeTab = 3 },
+                    selected = activeTab == 4,
+                    onClick = { activeTab = 4 },
                     modifier = Modifier
                         .weight(1f)
                         .height(54.dp)
@@ -346,7 +370,7 @@ fun HubScreen(
                     selectedFighter = selectedFighter,
                     onSelectFighter = { selectedFighterId = it },
                     onStartFight = onStartFight,
-                    onOpenShop = { activeTab = 3 }
+                    onOpenShop = { activeTab = 4 }
                 )
                 1 -> MultiplayerHubTab(
                     currentUser = currentUser,
@@ -359,7 +383,23 @@ fun HubScreen(
                     onHostWifiMatch = onHostWifiMatch,
                     onJoinWifiMatch = onJoinWifiMatch
                 )
-                2 -> SkinsTab(
+                2 -> ChatLobbySection(
+                    state = chatRoomState,
+                    playerName = settings.playerName,
+                    appearance = appearance,
+                    equippedGlove = economy.equippedGlove,
+                    onCreateRoom = onCreateChatRoom,
+                    onJoinRoom = onJoinChatRoom,
+                    onLeaveRoom = onLeaveChatRoom,
+                    onSendMessage = onSendChatMessage,
+                    onSelectCharacter = onSelectChatCharacter,
+                    onSelectRounds = onSelectChatRounds,
+                    onSendChallenge = onSendChatChallenge,
+                    onCancelChallenge = onCancelChatChallenge,
+                    onAcceptChallenge = onAcceptChatChallenge,
+                    onDeclineChallenge = onDeclineChatChallenge
+                )
+                3 -> SkinsTab(
                     playerName = settings.playerName,
                     appearance = appearance,
                     equippedGlove = economy.equippedGlove,
@@ -430,7 +470,7 @@ private fun MenuTabButton(
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
+                    fontSize = 10.sp
                 ),
                 color = if (selected) ArenaObsidian else ChalkWhite,
                 maxLines = 1,

@@ -76,12 +76,15 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
     private var playerInvulnMs = 0L
 
     private var enemyStateTimerMs = 0L
-    private var enemyAiCooldownMs = 1100L
+    private var enemyStrikeDurationMs = 145f
+    private var enemyAiCooldownMs = 320L
     private var enemyStrikeImpactDone = false
     private var enemyRecoveryTargetCount = 7
     private var enemyComboChainRemaining = 0
     private var enemyMoveDir = 1f
-    private var enemyMoveTimerMs = 1200L
+    private var enemyMoveTimerMs = 550L
+    private var consecutiveHitsOnEnemy = 0
+    private var enemyReactiveGuardPending = false
 
     private var knockdownTickMs = 0L
     private var roundOverTimerMs = 0L
@@ -138,9 +141,11 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
         guardStartedElapsedMs = -9999L
         playerInvulnMs = 0L
         enemyStateTimerMs = 0L
-        enemyAiCooldownMs = 1100L
+        enemyAiCooldownMs = 320L
         enemyStrikeImpactDone = false
         enemyComboChainRemaining = 0
+        consecutiveHitsOnEnemy = 0
+        enemyReactiveGuardPending = false
         moveInputX = 0f
         moveInputZ = 0f
         knockdownTickMs = 0L
@@ -178,6 +183,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
         crowdBannerTimerMs = 1800L
         soundEngine.playPresentationFanfare()
         soundEngine.playCrowdCheer(0.75f)
+        soundEngine.announceReferee("¡Damas y caballeros, noche de campeonato!")
         startLoop()
     }
 
@@ -192,16 +198,20 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
         loopJob = null
         moveInputX = 0f
         moveInputZ = 0f
+        soundEngine.stopReferee()
     }
 
     fun togglePause() {
         _uiState.update { state ->
             when (state.phase) {
-                FightPhase.FIGHTING, FightPhase.INTRO, FightPhase.PRESENTATION -> state.copy(
-                    phase = FightPhase.PAUSED,
-                    previousPhaseBeforePause = state.phase,
-                    isGuarding = false
-                )
+                FightPhase.FIGHTING, FightPhase.INTRO, FightPhase.PRESENTATION -> {
+                    soundEngine.stopReferee()
+                    state.copy(
+                        phase = FightPhase.PAUSED,
+                        previousPhaseBeforePause = state.phase,
+                        isGuarding = false
+                    )
+                }
                 FightPhase.PAUSED -> state.copy(phase = state.previousPhaseBeforePause)
                 else -> state
             }
@@ -220,6 +230,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
         if (held && !state.isGuarding) {
             guardStartedElapsedMs = totalFightElapsedMs
+            soundEngine.playGuardUp()
         }
         _uiState.update { curr ->
             val nextAction = when {
@@ -253,7 +264,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 playerStamina = (curr.playerStamina - 7f).coerceAtLeast(0f)
             )
         }
-        soundEngine.playWhoosh()
+        soundEngine.playDodge(perfect = false)
     }
 
     fun throwPunch(type: PunchType) {
@@ -293,7 +304,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 stats = curr.stats.copy(punchesThrown = curr.stats.punchesThrown + 1)
             )
         }
-        soundEngine.playWhoosh()
+        soundEngine.playPunchThrow(type)
     }
 
     fun mashGetUp() {
@@ -301,16 +312,16 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
         if (state.phase != FightPhase.KNOCKDOWN_COUNT || state.knockedDownWho != HandSide.LEFT) return
         if (state.stats.knockdownsSuffered >= 3) return
 
-        val nextProg = (state.playerGetUpProgress + 0.17f).coerceAtMost(1f)
+        val nextProg = (state.playerGetUpProgress + 0.13f).coerceAtMost(1f)
         if (nextProg >= 1f) {
-            playerInvulnMs = 1300L
+            playerInvulnMs = 1050L
             playerActionTimerMs = 0L
-            enemyAiCooldownMs = 1000L
+            enemyAiCooldownMs = 650L
             _uiState.update { curr ->
                 curr.copy(
                     phase = FightPhase.FIGHTING,
-                    playerHp = curr.playerMaxHp * 0.44f,
-                    playerStamina = curr.playerMaxStamina * 0.78f,
+                    playerHp = curr.playerMaxHp * 0.36f,
+                    playerStamina = curr.playerMaxStamina * 0.72f,
                     playerAction = PlayerAction.IDLE,
                     knockedDownWho = null,
                     playerGetUpProgress = 0f,
@@ -321,6 +332,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             addCallout("¡DE PIE!", CalloutTone.EMERALD, 0.5f, 0.6f)
             soundEngine.playBell(doubleRing = false)
             soundEngine.playCrowdCheer(0.9f)
+            soundEngine.announceReferee("¡Se levanta! ¡Sigan peleando!")
         } else {
             _uiState.update { it.copy(playerGetUpProgress = nextProg) }
         }
@@ -401,6 +413,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     soundEngine.playCrowdCheer(0.7f)
+                    soundEngine.announceReferee("En la esquina azul, ${fighter.name}, ${fighter.nickname}")
                 }
                 2 -> {
                     _uiState.update {
@@ -412,6 +425,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     soundEngine.playPresentationFanfare()
+                    soundEngine.announceReferee("En la esquina roja, ${_uiState.value.playerName}")
                 }
             }
         }
@@ -432,12 +446,14 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         soundEngine.playBell(doubleRing = false)
+        soundEngine.announceReferee("Round $roundNum")
     }
 
     private fun tickIntro(dtMs: Long) {
         introTimerMs -= dtMs
         if (introTimerMs <= 520L && _uiState.value.introText != "¡BOX!") {
             _uiState.update { it.copy(introText = "¡BOX!") }
+            soundEngine.announceReferee("¡Box!")
         }
         if (introTimerMs <= 0L) {
             _uiState.update { it.copy(phase = FightPhase.FIGHTING, introText = "") }
@@ -510,30 +526,31 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
         enemyMoveTimerMs -= dtMs
         if (enemyMoveTimerMs <= 0L) {
-            enemyMoveTimerMs = Random.nextLong(700L, 1600L)
+            enemyMoveTimerMs = Random.nextLong(420L, 950L)
             enemyMoveDir = if (Random.nextFloat() < 0.5f) -1f else 1f
         }
 
         val dtSec = dtMs / 1000f
-        val roundAggro = 0.55f + (state.round - 1) * 0.06f
+        val speedRatio = 0.90f + state.fighter.speedStat * 0.055f
+        val roundAggro = (1.10f + (state.round - 1) * 0.10f) * speedRatio
         val targetX = when (state.enemyPhase) {
             EnemyPhase.HIT_STUN, EnemyPhase.VULNERABLE -> state.enemyPosX
             EnemyPhase.TELEGRAPH, EnemyPhase.STRIKING -> state.playerPosX
-            else -> (state.playerPosX + enemyMoveDir * 0.28f).coerceIn(-0.82f, 0.82f)
+            else -> (state.playerPosX + enemyMoveDir * 0.18f).coerceIn(-0.82f, 0.82f)
         }
         val diffX = targetX - state.enemyPosX
-        val nextEnemyX = (state.enemyPosX + diffX.coerceIn(-1f, 1f) * 0.72f * roundAggro * dtSec)
+        val nextEnemyX = (state.enemyPosX + diffX.coerceIn(-1f, 1f) * 1.55f * roundAggro * dtSec)
             .coerceIn(-0.85f, 0.85f)
 
-        // Enemy steps in slightly when winding up or aggressive, backs slightly if low HP
+        // Enemy steps aggressively into pocket range
         val targetZ = when {
             state.enemyPhase == EnemyPhase.TELEGRAPH || state.enemyPhase == EnemyPhase.STRIKING ->
-                (state.playerPosZ - 0.42f).coerceIn(0.0f, 0.28f)
-            state.enemyHp < state.enemyMaxHp * 0.30f -> 0.02f
-            else -> (state.playerPosZ - 0.50f).coerceIn(0.0f, 0.24f)
+                (state.playerPosZ - 0.34f).coerceIn(0.0f, 0.24f)
+            state.enemyHp < state.enemyMaxHp * 0.25f -> 0.04f
+            else -> (state.playerPosZ - 0.40f).coerceIn(0.0f, 0.22f)
         }
         val diffZ = targetZ - state.enemyPosZ
-        val nextEnemyZ = (state.enemyPosZ + diffZ * 1.4f * dtSec).coerceIn(0.0f, 0.26f)
+        val nextEnemyZ = (state.enemyPosZ + diffZ * 2.8f * speedRatio * dtSec).coerceIn(0.0f, 0.24f)
 
         _uiState.update {
             it.copy(enemyPosX = nextEnemyX, enemyPosZ = nextEnemyZ)
@@ -609,47 +626,59 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val isCounter = state.counterWindowMs > 0L || state.enemyPhase == EnemyPhase.VULNERABLE
-        val comboMult = 1f + (state.comboCount.coerceAtMost(5) * 0.08f)
-        val closePocketBonus = if (dist < 0.34f && (punch == PunchType.HOOK || punch == PunchType.UPPERCUT)) 1.20f else 1f
+        val comboMult = 1f + (state.comboCount.coerceAtMost(4) * 0.05f)
+        val closePocketBonus = if (dist < 0.34f && (punch == PunchType.HOOK || punch == PunchType.UPPERCUT)) 1.15f else 1f
         val gloveDmgMult = state.equippedGlove.damageMultiplier
 
         // Check enemy guard
-        if (state.enemyPhase == EnemyPhase.GUARDING && !isCounter && punch.breaksGuardFactor < 0.5f) {
-            val chip = punch.damage * 0.26f * gloveDmgMult
+        if (state.enemyPhase == EnemyPhase.GUARDING && !isCounter && punch.breaksGuardFactor < 0.55f) {
+            val chip = punch.damage * 0.12f * gloveDmgMult
             val nextEnemyHp = (state.enemyHp - chip).coerceAtLeast(0f)
             playerRoundDamage += chip
+            consecutiveHitsOnEnemy = 0
             _uiState.update {
                 it.copy(
                     enemyHp = nextEnemyHp,
                     comboCount = 0,
-                    enemyHitFlash = 0.25f
+                    enemyHitFlash = 0.20f
                 )
             }
             addCallout("BLOQUEADO", CalloutTone.COBALT, 0.5f, 0.34f)
             addSparks(0.5f, 0.36f, CalloutTone.COBALT, 5)
-            soundEngine.playBlock(perfectParry = false)
+            soundEngine.playBlock(perfectParry = false, heavy = punch != PunchType.JAB)
+            val counterTriggerChance = (state.fighter.counterChance * 0.68f + (state.round - 1) * 0.02f).coerceAtMost(0.80f)
+            if (nextEnemyHp > 0f && Random.nextFloat() < counterTriggerChance) {
+                val rSpeed = (1f - (state.round - 1) * 0.06f).coerceAtLeast(0.40f)
+                enemyComboChainRemaining = if (Random.nextFloat() < 0.68f) 2 else 1
+                startEnemyTelegraph(rSpeed * 0.78f)
+            }
             return
         }
 
         val brokeGuard = state.enemyPhase == EnemyPhase.GUARDING
         val counterMult = when {
-            isCounter && punch == PunchType.UPPERCUT -> 2.35f
-            isCounter -> 1.95f
-            brokeGuard -> 1.25f
+            isCounter && punch == PunchType.UPPERCUT -> 1.95f
+            isCounter -> 1.65f
+            brokeGuard -> 1.05f
             else -> 1f
         }
         val rawDamage = punch.damage * counterMult * comboMult * closePocketBonus * gloveDmgMult
         val nextEnemyHp = (state.enemyHp - rawDamage).coerceAtLeast(0f)
         playerRoundDamage += rawDamage
 
-        val interrupted = isCounter || brokeGuard || punch == PunchType.HOOK || punch == PunchType.UPPERCUT ||
-            (state.enemyPhase == EnemyPhase.TELEGRAPH && punch == PunchType.JAB && Random.nextFloat() < 0.42f)
+        val interrupted = isCounter || brokeGuard ||
+            ((punch == PunchType.HOOK || punch == PunchType.UPPERCUT) &&
+                (state.enemyPhase != EnemyPhase.TELEGRAPH || Random.nextFloat() < 0.65f)) ||
+            (state.enemyPhase == EnemyPhase.TELEGRAPH && punch == PunchType.JAB && Random.nextFloat() < 0.16f)
 
         val nextEnemyPhase = if (interrupted) EnemyPhase.HIT_STUN else state.enemyPhase
+        consecutiveHitsOnEnemy = if (isCounter) 1 else consecutiveHitsOnEnemy + 1
         if (interrupted) {
-            enemyStateTimerMs = if (isCounter) 420L else 260L
+            enemyStateTimerMs = if (isCounter) 200L else 110L
             enemyStrikeImpactDone = false
             enemyComboChainRemaining = 0
+            val reactiveChance = (0.54f + state.fighter.guardStat * 0.036f).coerceAtMost(0.90f)
+            enemyReactiveGuardPending = consecutiveHitsOnEnemy >= 2 && Random.nextFloat() < reactiveChance
         }
 
         val nextCombo = state.comboCount + 1
@@ -682,23 +711,23 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             isCounter -> {
                 addCallout("¡CONTRAATAQUE!", CalloutTone.GOLD, hitX, 0.28f)
                 addSparks(hitX, 0.32f, CalloutTone.GOLD, 12)
-                soundEngine.playImpact(heavy = true, counter = true)
+                soundEngine.playImpact(heavy = true, counter = true, punchType = punch)
                 maybePlayCrowdRoar("¡LA HINCHADA ENLOQUECE!")
             }
             brokeGuard -> {
                 addCallout("¡GUARDIA ROTA!", CalloutTone.GOLD, hitX, 0.30f)
                 addSparks(hitX, 0.34f, CalloutTone.GOLD, 9)
-                soundEngine.playImpact(heavy = true, counter = false)
+                soundEngine.playGuardBreak()
             }
             punch == PunchType.HOOK || punch == PunchType.UPPERCUT -> {
                 addCallout("¡GOLPE DURO!", CalloutTone.CRIMSON, hitX, 0.31f)
                 addSparks(hitX, 0.34f, CalloutTone.CRIMSON, 9)
-                soundEngine.playImpact(heavy = true, counter = false)
+                soundEngine.playImpact(heavy = true, counter = false, punchType = punch)
                 if (nextCombo >= 4) maybePlayCrowdRoar("¡RÁFAGA DE GOLPES!")
             }
             else -> {
                 addSparks(hitX, 0.34f, CalloutTone.WHITE, 6)
-                soundEngine.playImpact(heavy = false, counter = false)
+                soundEngine.playImpact(heavy = false, counter = false, punchType = punch)
             }
         }
 
@@ -710,9 +739,9 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
     private fun tickEnemyAi(dtMs: Long) {
         val state = _uiState.value
         val fighter = state.fighter
-        // Round difficulty scaling across 10 rounds
-        val roundSpeedMult = (1f - (state.round - 1) * 0.045f).coerceAtLeast(0.56f)
-        val guardBias = (fighter.guardChance + (state.round - 1) * 0.015f).coerceAtMost(0.62f)
+        // Relentless difficulty & speed scaling across 10 rounds
+        val roundSpeedMult = (1f - (state.round - 1) * 0.06f).coerceAtLeast(0.40f)
+        val guardBias = (fighter.guardChance * 0.62f + (state.round - 1) * 0.015f).coerceAtMost(0.65f)
 
         when (state.enemyPhase) {
             EnemyPhase.IDLE -> {
@@ -720,18 +749,18 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 if (enemyAiCooldownMs <= 0L) {
                     val roll = Random.nextFloat()
                     if (roll < guardBias) {
-                        enemyStateTimerMs = (Random.nextLong(550L, 1050L) * roundSpeedMult).toLong()
+                        enemyStateTimerMs = (Random.nextLong(290L, 540L) * roundSpeedMult).toLong()
                         _uiState.update { it.copy(enemyPhase = EnemyPhase.GUARDING, enemyPhaseProgress = 0f) }
-                    } else if (state.relativeDistance <= 0.84f) {
-                        // Start combo flurry in later rounds
+                    } else if (state.relativeDistance <= 0.86f) {
                         enemyComboChainRemaining = when {
-                            state.round >= 8 && Random.nextFloat() < 0.55f -> 2
-                            state.round >= 4 && Random.nextFloat() < 0.40f -> 1
+                            state.round >= 6 && Random.nextFloat() < 0.78f -> 3
+                            state.round >= 3 && Random.nextFloat() < 0.72f -> 2
+                            Random.nextFloat() < 0.68f -> 1
                             else -> 0
                         }
                         startEnemyTelegraph(roundSpeedMult)
                     } else {
-                        enemyAiCooldownMs = 360L
+                        enemyAiCooldownMs = 140L
                     }
                 }
             }
@@ -739,12 +768,12 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             EnemyPhase.GUARDING -> {
                 enemyStateTimerMs -= dtMs
                 if (enemyStateTimerMs <= 0L) {
-                    val counterRoll = (fighter.counterChance + (state.round - 1) * 0.02f).coerceAtMost(0.65f)
-                    if (Random.nextFloat() < counterRoll && state.relativeDistance <= 0.82f) {
-                        enemyComboChainRemaining = if (state.round >= 6 && Random.nextFloat() < 0.45f) 1 else 0
-                        startEnemyTelegraph(roundSpeedMult)
+                    val counterRoll = (fighter.counterChance + (state.round - 1) * 0.025f).coerceAtMost(0.88f)
+                    if (Random.nextFloat() < counterRoll && state.relativeDistance <= 0.84f) {
+                        enemyComboChainRemaining = if (Random.nextFloat() < 0.68f) 2 else 1
+                        startEnemyTelegraph(roundSpeedMult * 0.84f)
                     } else {
-                        enemyAiCooldownMs = (Random.nextLong(380L, 760L) * roundSpeedMult).toLong()
+                        enemyAiCooldownMs = (Random.nextLong(160L, 320L) * roundSpeedMult).toLong()
                         _uiState.update { it.copy(enemyPhase = EnemyPhase.IDLE, enemyPhaseProgress = 0f) }
                     }
                 }
@@ -752,15 +781,17 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
             EnemyPhase.TELEGRAPH -> {
                 enemyStateTimerMs -= dtMs
-                val total = (fighter.telegraphMs * roundSpeedMult).coerceAtLeast(300f)
+                val total = (fighter.telegraphMs * roundSpeedMult).coerceAtLeast(165f)
                 val prog = ((total - enemyStateTimerMs) / total).coerceIn(0f, 1f)
                 if (enemyStateTimerMs <= 0L) {
-                    enemyStateTimerMs = (240f * (0.85f + roundSpeedMult * 0.15f)).toLong()
+                    enemyStrikeDurationMs = (145f * (0.82f + roundSpeedMult * 0.18f)).coerceAtLeast(120f)
+                    enemyStateTimerMs = enemyStrikeDurationMs.toLong()
                     enemyStrikeImpactDone = false
+                    consecutiveHitsOnEnemy = 0
                     _uiState.update {
                         it.copy(enemyPhase = EnemyPhase.STRIKING, enemyPhaseProgress = 0f)
                     }
-                    soundEngine.playWhoosh()
+                    soundEngine.playEnemyPunchThrow(_uiState.value.enemyAttack)
                 } else {
                     _uiState.update { it.copy(enemyPhaseProgress = prog) }
                 }
@@ -768,7 +799,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
             EnemyPhase.STRIKING -> {
                 enemyStateTimerMs -= dtMs
-                val prog = ((230f - enemyStateTimerMs) / 230f).coerceIn(0f, 1f)
+                val prog = ((enemyStrikeDurationMs - enemyStateTimerMs) / enemyStrikeDurationMs).coerceIn(0f, 1f)
                 if (!enemyStrikeImpactDone && prog >= 0.45f) {
                     enemyStrikeImpactDone = true
                     resolveEnemyStrikeImpact()
@@ -776,12 +807,12 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 if (_uiState.value.phase != FightPhase.FIGHTING) return
                 if (enemyStateTimerMs <= 0L) {
                     val wasVulnerable = _uiState.value.counterWindowMs > 0L
-                    if (!wasVulnerable && enemyComboChainRemaining > 0 && _uiState.value.relativeDistance <= 0.84f) {
+                    if (!wasVulnerable && enemyComboChainRemaining > 0 && _uiState.value.relativeDistance <= 0.86f) {
                         enemyComboChainRemaining -= 1
-                        startEnemyTelegraph(roundSpeedMult * 0.88f)
+                        startEnemyTelegraph(roundSpeedMult * 0.80f)
                     } else if (wasVulnerable) {
                         enemyComboChainRemaining = 0
-                        enemyStateTimerMs = 580L
+                        enemyStateTimerMs = 280L
                         _uiState.update {
                             it.copy(
                                 enemyPhase = EnemyPhase.VULNERABLE,
@@ -791,7 +822,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     } else {
                         enemyAiCooldownMs = (Random.nextLong(fighter.aiIntervalMinMs, fighter.aiIntervalMaxMs) * roundSpeedMult)
-                            .toLong().coerceAtLeast(360L)
+                            .toLong().coerceAtLeast(140L)
                         _uiState.update {
                             it.copy(
                                 enemyPhase = EnemyPhase.IDLE,
@@ -808,14 +839,32 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             EnemyPhase.VULNERABLE, EnemyPhase.HIT_STUN -> {
                 enemyStateTimerMs -= dtMs
                 if (enemyStateTimerMs <= 0L) {
-                    enemyAiCooldownMs = (Random.nextLong(fighter.aiIntervalMinMs, fighter.aiIntervalMaxMs) * roundSpeedMult)
-                        .toLong().coerceAtLeast(360L)
-                    _uiState.update {
-                        it.copy(
-                            enemyPhase = EnemyPhase.IDLE,
-                            enemyPhaseProgress = 0f,
-                            enemyAttack = null
-                        )
+                    if (enemyReactiveGuardPending && state.enemyPhase == EnemyPhase.HIT_STUN) {
+                        enemyReactiveGuardPending = false
+                        consecutiveHitsOnEnemy = 0
+                        if (Random.nextFloat() < fighter.counterChance * 0.72f && state.relativeDistance <= 0.84f) {
+                            enemyComboChainRemaining = 1
+                            startEnemyTelegraph(roundSpeedMult * 0.78f)
+                        } else {
+                            enemyStateTimerMs = (Random.nextLong(300L, 520L) * roundSpeedMult).toLong()
+                            _uiState.update {
+                                it.copy(
+                                    enemyPhase = EnemyPhase.GUARDING,
+                                    enemyPhaseProgress = 0f,
+                                    enemyAttack = null
+                                )
+                            }
+                        }
+                    } else {
+                        enemyAiCooldownMs = (Random.nextLong(fighter.aiIntervalMinMs, fighter.aiIntervalMaxMs) * roundSpeedMult)
+                            .toLong().coerceAtLeast(140L)
+                        _uiState.update {
+                            it.copy(
+                                enemyPhase = EnemyPhase.IDLE,
+                                enemyPhaseProgress = 0f,
+                                enemyAttack = null
+                            )
+                        }
                     }
                 }
             }
@@ -835,7 +884,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             else -> EnemyAttackType.entries
         }
         val attack = attackPool.random()
-        enemyStateTimerMs = (fighter.telegraphMs * roundSpeedMult).toLong().coerceAtLeast(300L)
+        enemyStateTimerMs = (fighter.telegraphMs * roundSpeedMult).toLong().coerceAtLeast(165L)
         _uiState.update {
             it.copy(
                 enemyPhase = EnemyPhase.TELEGRAPH,
@@ -859,12 +908,12 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             addCallout("¡AL AIRE!", CalloutTone.EMERALD, 0.5f, 0.56f)
-            soundEngine.playWhoosh()
+            soundEngine.playDodge(perfect = true)
             return
         }
 
-        val roundPowerMult = 1f + (state.round - 1) * 0.065f
-        val powerMult = (0.76f + (state.fighter.powerStat * 0.052f)) * roundPowerMult
+        val roundPowerMult = 1f + (state.round - 1) * 0.08f
+        val powerMult = (0.96f + (state.fighter.powerStat * 0.068f)) * roundPowerMult
         val incomingDamage = attack.damage * powerMult
 
         // Check active dodge
@@ -874,16 +923,16 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             if (dodgedSide == attack.expectedDodge || !attack.isHeavy) {
                 _uiState.update {
                     it.copy(
-                        counterWindowMs = 1200L,
+                        counterWindowMs = 920L,
                         crowdExcitement = (it.crowdExcitement + 0.16f).coerceAtMost(1f),
                         stats = it.stats.copy(dodgesMade = it.stats.dodgesMade + 1)
                     )
                 }
                 addCallout("¡ESQUIVA PERFECTA!", CalloutTone.EMERALD, 0.5f, 0.58f)
-                soundEngine.playWhoosh()
+                soundEngine.playDodge(perfect = true)
                 return
             } else {
-                val graze = incomingDamage * 0.38f
+                val graze = incomingDamage * 0.45f
                 val nextHp = (state.playerHp - graze).coerceAtLeast(0f)
                 enemyRoundDamage += graze
                 _uiState.update {
@@ -903,13 +952,13 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
         // Check Guard / Parry (enhanced by equipped glove!)
         if (state.isGuarding || state.playerAction == PlayerAction.GUARD) {
-            val parryWindow = 270L + (state.equippedGlove.guardAbsorptionBonus * 900L).toLong()
+            val parryWindow = 220L + (state.equippedGlove.guardAbsorptionBonus * 800L).toLong()
             val timeSinceGuard = totalFightElapsedMs - guardStartedElapsedMs
             val isPerfectParry = timeSinceGuard in 0L..parryWindow
             if (isPerfectParry) {
                 _uiState.update {
                     it.copy(
-                        counterWindowMs = 1250L,
+                        counterWindowMs = 950L,
                         crowdExcitement = (it.crowdExcitement + 0.22f).coerceAtMost(1f),
                         stats = it.stats.copy(blocksMade = it.stats.blocksMade + 1)
                     )
@@ -918,20 +967,21 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 addSparks(0.5f, 0.56f, CalloutTone.GOLD, 10)
                 soundEngine.playBlock(perfectParry = true)
             } else {
-                val absorbFactor = (0.18f - state.equippedGlove.guardAbsorptionBonus).coerceAtLeast(0.06f)
+                val baseBleed = if (attack.isHeavy) 0.30f else 0.20f
+                val absorbFactor = (baseBleed - state.equippedGlove.guardAbsorptionBonus).coerceAtLeast(0.10f)
                 val blockedDmg = incomingDamage * absorbFactor
                 val nextHp = (state.playerHp - blockedDmg).coerceAtLeast(0f)
                 enemyRoundDamage += blockedDmg
                 _uiState.update {
                     it.copy(
                         playerHp = nextHp,
-                        playerStamina = (it.playerStamina - 5.5f).coerceAtLeast(0f),
-                        screenShake = 0.25f,
+                        playerStamina = (it.playerStamina - 9.5f).coerceAtLeast(0f),
+                        screenShake = 0.30f,
                         stats = it.stats.copy(blocksMade = it.stats.blocksMade + 1)
                     )
                 }
                 addCallout("BLOQUEO", CalloutTone.COBALT, 0.5f, 0.62f)
-                soundEngine.playBlock(perfectParry = false)
+                soundEngine.playBlock(perfectParry = false, heavy = attack.isHeavy)
                 if (nextHp <= 0f) triggerKnockdown(who = HandSide.LEFT, massiveFinish = false)
             }
             return
@@ -963,6 +1013,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
     private fun triggerKnockdown(who: HandSide, massiveFinish: Boolean) {
         soundEngine.playKnockdown()
         soundEngine.playCrowdCheer(1.0f)
+        soundEngine.announceReferee("¡A la lona! ¡Atrás a la esquina!")
         knockdownTickMs = 820L
 
         if (who == HandSide.RIGHT) {
@@ -1019,8 +1070,14 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
         if (state.knockedDownWho == HandSide.RIGHT) {
             if (nextCount >= enemyRecoveryTargetCount && enemyRecoveryTargetCount <= 10) {
-                val recoverRatio = if (state.stats.knockdownsScored == 1) 0.45f else 0.32f
-                enemyAiCooldownMs = 950L
+                val recoverRatio = when (state.stats.knockdownsScored) {
+                    1 -> 0.65f
+                    2 -> 0.50f
+                    else -> 0.40f
+                }
+                enemyAiCooldownMs = 360L
+                consecutiveHitsOnEnemy = 0
+                enemyReactiveGuardPending = false
                 _uiState.update { curr ->
                     curr.copy(
                         phase = FightPhase.FIGHTING,
@@ -1032,6 +1089,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 addCallout("¡SE LEVANTA!", CalloutTone.GOLD, 0.5f, 0.35f)
                 soundEngine.playBell(doubleRing = false)
+                soundEngine.announceReferee("¡Se levanta! ¡Box!")
                 return
             }
         }
@@ -1045,6 +1103,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             finishMatch(outcome)
         } else {
             _uiState.update { it.copy(knockdownCount = nextCount) }
+            soundEngine.announceRefereeCount(nextCount)
         }
     }
 
@@ -1071,6 +1130,7 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
             finishMatch(outcome)
         } else {
             roundOverTimerMs = 2150L
+            soundEngine.announceReferee("¡Fin del round ${state.round}!")
             val winnerTxt = if (playerRoundDamage >= enemyRoundDamage) {
                 "ROUND PARA TI"
             } else {
@@ -1098,15 +1158,17 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
         playerRoundDamage = 0f
         enemyRoundDamage = 0f
         enemyComboChainRemaining = 0
-        enemyAiCooldownMs = 950L
+        consecutiveHitsOnEnemy = 0
+        enemyReactiveGuardPending = false
+        enemyAiCooldownMs = 320L
 
         _uiState.update { curr ->
             curr.copy(
                 roundTimeMs = 45_000L,
-                playerHp = (curr.playerHp + curr.playerMaxHp * 0.16f).coerceAtMost(curr.playerMaxHp),
+                playerHp = (curr.playerHp + curr.playerMaxHp * 0.11f).coerceAtMost(curr.playerMaxHp),
                 playerStamina = curr.playerMaxStamina,
                 playerAction = PlayerAction.IDLE,
-                enemyHp = (curr.enemyHp + curr.enemyMaxHp * 0.14f).coerceAtMost(curr.enemyMaxHp),
+                enemyHp = (curr.enemyHp + curr.enemyMaxHp * 0.24f).coerceAtMost(curr.enemyMaxHp),
                 enemyPhase = EnemyPhase.IDLE,
                 enemyAttack = null,
                 counterWindowMs = 0L,
@@ -1119,6 +1181,14 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
     private fun finishMatch(outcome: MatchOutcome) {
         soundEngine.playBell(doubleRing = true)
         soundEngine.playCrowdCheer(1.0f)
+        val currentState = _uiState.value
+        val announcement = when (outcome) {
+            MatchOutcome.KO_WIN -> "¡Nocaut! ¡Victoria para ${currentState.playerName}!"
+            MatchOutcome.KO_LOSS -> "¡Nocaut! ¡Victoria para ${currentState.fighter.name}!"
+            MatchOutcome.DECISION_WIN -> "¡Decisión de los jueces! ¡Ganador, ${currentState.playerName}!"
+            MatchOutcome.DECISION_LOSS -> "¡Decisión de los jueces! ¡Ganador, ${currentState.fighter.name}!"
+        }
+        soundEngine.announceReferee(announcement)
         loopJob?.cancel()
         loopJob = null
         moveInputX = 0f

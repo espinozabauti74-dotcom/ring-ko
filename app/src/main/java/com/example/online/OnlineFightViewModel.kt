@@ -202,7 +202,9 @@ class OnlineFightViewModel(
                 val previousPhase = _uiState.value.phase
                 if (previousPhase == OnlineBoutPhase.LOADING || previousPhase == OnlineBoutPhase.WAITING_OPPONENT) {
                     presentationRemainingMs = 2600L
-                    if (soundEnabled()) soundEngine.playPresentationFanfare()
+                    syncSoundPrefs()
+                    soundEngine.playPresentationFanfare()
+                    soundEngine.announceReferee("$myName contra $oppName, ¡que suene la campana!")
                     _uiState.update {
                         it.copy(
                             phase = OnlineBoutPhase.PRESENTATION,
@@ -256,9 +258,13 @@ class OnlineFightViewModel(
                 val method = match.winMethod ?: "KO"
                 if (!resultRecorded) {
                     resultRecorded = true
-                    if (soundEnabled()) {
-                        if (won) soundEngine.playCrowdCheer() else soundEngine.playBell()
-                    }
+                    syncSoundPrefs()
+                    if (method == "KO") soundEngine.playKnockdown()
+                    soundEngine.playBell(doubleRing = true)
+                    if (won) soundEngine.playCrowdCheer()
+                    val winnerName = if (won) myName else oppName
+                    val verdict = if (method == "KO") "¡Nocaut! ¡Victoria para $winnerName!" else "¡Decisión por puntos! ¡Ganador, $winnerName!"
+                    soundEngine.announceReferee(verdict)
                     viewModelScope.launch {
                         repository.recordMatchResult(won = won, isKo = (method == "KO"))
                     }
@@ -288,7 +294,8 @@ class OnlineFightViewModel(
     ) {
         oppPunchElapsedMs = 0L
         _uiState.update { it.copy(oppActivePunch = punch, oppPunchProgress = 0.05f) }
-        if (soundEnabled()) soundEngine.playWhoosh()
+        syncSoundPrefs()
+        soundEngine.playPunchThrow(punch)
 
         val s = _uiState.value
         if (s.phase != OnlineBoutPhase.FIGHTING) return
@@ -298,6 +305,7 @@ class OnlineFightViewModel(
 
         if (dodgeRemainingMs > 0L) {
             triggerCallout("¡ESQUIVA PERFECTA!", CalloutTone.EMERALD)
+            soundEngine.playDodge(perfect = true)
             _uiState.update { it.copy(counterWindowMs = 750L, crowdExcitement = (it.crowdExcitement + 0.14f).coerceAtMost(1f)) }
             return
         }
@@ -307,12 +315,12 @@ class OnlineFightViewModel(
             val parryWindow = (now - guardStartTimeMs) <= 280L
             if (parryWindow) {
                 triggerCallout("¡PARRY! CONTRA 2x", CalloutTone.GOLD)
-                if (soundEnabled()) soundEngine.playBlock(perfectParry = true)
+                soundEngine.playBlock(perfectParry = true)
                 _uiState.update { it.copy(counterWindowMs = 900L, crowdExcitement = (it.crowdExcitement + 0.18f).coerceAtMost(1f)) }
             } else {
                 val chip = (damage * (0.24f - s.myGlove.guardAbsorptionBonus)).coerceAtLeast(1f)
                 val nextHp = (s.myHp - chip).coerceAtLeast(1f)
-                if (soundEnabled()) soundEngine.playBlock()
+                soundEngine.playBlock(perfectParry = false, heavy = punch != PunchType.JAB)
                 _uiState.update { it.copy(myHp = nextHp, hitFlashAlpha = 0.25f) }
                 syncNow()
             }
@@ -320,9 +328,7 @@ class OnlineFightViewModel(
         }
 
         val nextHp = (s.myHp - damage).coerceAtLeast(0f)
-        soundEngine.soundEnabled = soundEnabled()
-        soundEngine.hapticsEnabled = hapticsEnabled()
-        soundEngine.playImpact(heavy = damage >= 15f)
+        soundEngine.playImpact(heavy = damage >= 15f, punchType = punch)
 
         _uiState.update {
             it.copy(
@@ -375,7 +381,9 @@ class OnlineFightViewModel(
             OnlineBoutPhase.PRESENTATION -> {
                 presentationRemainingMs -= dt
                 if (presentationRemainingMs <= 0L) {
-                    if (soundEnabled()) soundEngine.playBell()
+                    syncSoundPrefs()
+                    soundEngine.playBell()
+                    soundEngine.announceReferee("¡Round 1, peleen!")
                     triggerCallout("¡ROUND 1 — PELEEN!", CalloutTone.GOLD)
                     _uiState.update { it.copy(phase = OnlineBoutPhase.FIGHTING, roundTimeMs = 35_000L) }
                 }
@@ -423,7 +431,9 @@ class OnlineFightViewModel(
                     if (s.currentRound < s.maxRounds) {
                         nextRound += 1
                         finalRoundTime = 35_000L
-                        if (soundEnabled()) soundEngine.playBell()
+                        syncSoundPrefs()
+                        soundEngine.playBell()
+                        soundEngine.announceReferee("¡Round $nextRound!")
                         triggerCallout("¡ROUND $nextRound!", CalloutTone.GOLD)
                     } else {
                         finishByPoints()
@@ -462,7 +472,9 @@ class OnlineFightViewModel(
     fun skipPresentation() {
         if (_uiState.value.phase == OnlineBoutPhase.PRESENTATION) {
             presentationRemainingMs = 0L
-            if (soundEnabled()) soundEngine.playBell()
+            syncSoundPrefs()
+            soundEngine.playBell()
+            soundEngine.announceReferee("¡Round 1, peleen!")
             triggerCallout("¡A PELEAR!", CalloutTone.GOLD)
             _uiState.update { it.copy(phase = OnlineBoutPhase.FIGHTING, roundTimeMs = 35_000L) }
         }
@@ -478,7 +490,11 @@ class OnlineFightViewModel(
     fun setGuard(active: Boolean) {
         val s = _uiState.value
         if (s.phase != OnlineBoutPhase.FIGHTING) return
-        if (active && !s.myGuarding) guardStartTimeMs = System.currentTimeMillis()
+        if (active && !s.myGuarding) {
+            guardStartTimeMs = System.currentTimeMillis()
+            syncSoundPrefs()
+            soundEngine.playGuardUp()
+        }
         _uiState.update { it.copy(myGuarding = active) }
         syncNow()
     }
@@ -488,7 +504,8 @@ class OnlineFightViewModel(
         if (s.phase != OnlineBoutPhase.FIGHTING || dodgeRemainingMs > 0L || s.myStamina < 12f) return
         dodgeRemainingMs = 360L
         myDodgeSeq += 1L
-        if (soundEnabled()) soundEngine.playWhoosh()
+        syncSoundPrefs()
+        soundEngine.playDodge(perfect = false)
         _uiState.update { it.copy(myStamina = (it.myStamina - 12f).coerceAtLeast(0f), myDodging = true) }
         syncNow(overrideDodgeSeq = myDodgeSeq)
     }
@@ -510,12 +527,14 @@ class OnlineFightViewModel(
 
         myPunchElapsedMs = 0L
         myPunchSeq += 1L
-        soundEngine.soundEnabled = soundEnabled()
-        soundEngine.hapticsEnabled = hapticsEnabled()
+        syncSoundPrefs()
+        soundEngine.playPunchThrow(punch)
         if (inRange && !s.oppDodging) {
-            soundEngine.playImpact(heavy = punch.damage >= 16f, counter = isCounter)
-        } else {
-            soundEngine.playWhoosh()
+            if (s.oppGuarding && punch.breaksGuardFactor < 0.5f) {
+                soundEngine.playBlock(perfectParry = false, heavy = punch != PunchType.JAB)
+            } else {
+                soundEngine.playImpact(heavy = punch.damage >= 16f, counter = isCounter, punchType = punch)
+            }
         }
 
         _uiState.update {
@@ -617,16 +636,23 @@ class OnlineFightViewModel(
         _uiState.update { it.copy(calloutText = text, calloutTone = tone) }
     }
 
+    private fun syncSoundPrefs() {
+        soundEngine.soundEnabled = soundEnabled()
+        soundEngine.hapticsEnabled = hapticsEnabled()
+    }
+
     fun stopMatch() {
         observeJob?.cancel()
         loopJob?.cancel()
         observeJob = null
         loopJob = null
         moveDir = 0f
+        soundEngine.stopReferee()
     }
 
     override fun onCleared() {
         super.onCleared()
         stopMatch()
+        soundEngine.release()
     }
 }

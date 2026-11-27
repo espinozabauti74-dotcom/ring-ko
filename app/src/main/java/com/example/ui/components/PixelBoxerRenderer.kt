@@ -30,10 +30,10 @@ private val BOXER_BODY_GRID: List<String> = listOf(
     ".......KSSSDSSSSDSSSK.....", // 16
     "......KKBBBBBBBBBBBBKK....", // 17
     "......KBBBBWWBBBBBBBBK....", // 18
-    ".....KKWWWWWWWWWWWWWWKK...", // 19
-    "....KTTWWWWWWWWWWWWWWTTK..", // 20
-    "....KTWWWWWWwwwwWWWWWWwK..", // 21
-    "....KWWWWwwKKKKKKwwWWWWK..", // 22
+    ".....KKTTTTTTTTTTTTTTKK...", // 19
+    "....KBBTTTTTTTTTTTTTTBBK..", // 20
+    "....KBTTTTTTttttTTTTTTtK..", // 21
+    "....KTTTTttKKKKKKttTTTTK..", // 22
     "....KKKKKKK......KKKKKKK..", // 23
     "...KLLSSDK........KLLSSDK.", // 24
     "...KSSSDKK........KKSSSDK.", // 25
@@ -87,6 +87,8 @@ fun DrawScope.drawPixelArtBoxer(
     val outline = Color(0xFF120E18)
     val skinLight = lerp(skinBase, Color.White, 0.28f)
     val skinDark = lerp(skinBase, Color(0xFF2B1205), 0.34f)
+    val trunksBelt = lerp(trunksColor, Color.White, 0.28f)
+    val trunksDark = lerp(trunksColor, Color.Black, 0.34f)
     val flashMix = hitFlashAlpha.coerceIn(0f, 1f)
 
     fun maybeFlash(base: Color): Color {
@@ -116,8 +118,9 @@ fun DrawScope.drawPixelArtBoxer(
                 'L' -> maybeFlash(skinLight)
                 'D' -> maybeFlash(skinDark)
                 'E' -> outline
-                'B' -> maybeFlash(trunksColor)
+                'B' -> maybeFlash(trunksBelt)
                 'T' -> maybeFlash(trunksColor)
+                't' -> maybeFlash(trunksDark)
                 'W' -> maybeFlash(Color(0xFFF4F6FA))
                 'w' -> maybeFlash(Color(0xFFB5C2D6))
                 else -> continue

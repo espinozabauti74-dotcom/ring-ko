@@ -36,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.audio.BoxingSoundEngine
+import com.example.chat.ChatArenaViewModel
 import com.example.game.FightViewModel
 import com.example.game.VersusViewModel
 import com.example.online.GoogleSignInGateCard
@@ -60,6 +61,7 @@ object AppRoutes {
     const val VERSUS = "versus/{p2Name}/{rounds}"
     const val ONLINE_FIGHT = "online/{matchId}"
     const val WIFI_FIGHT = "wifi/{role}/{hostIp}/{port}/{rounds}/{charId}"
+    const val CHAT_FIGHT = "chat_fight"
     fun fightRoute(fighterId: String): String = "fight/$fighterId"
     fun versusRoute(p2Name: String, rounds: Int): String = "versus/${Uri.encode(p2Name)}/$rounds"
     fun onlineFightRoute(matchId: String): String = "online/${Uri.encode(matchId)}"
@@ -121,6 +123,41 @@ fun RingKoApp(
     val fightState by fightViewModel.uiState.collectAsStateWithLifecycle()
     val versusState by versusViewModel.uiState.collectAsStateWithLifecycle()
 
+    val chatArenaViewModel: ChatArenaViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                val app = checkNotNull(this[APPLICATION_KEY]) {
+                    "APPLICATION_KEY missing from CreationExtras"
+                }
+                ChatArenaViewModel(
+                    soundEngine = BoxingSoundEngine(app),
+                    soundEnabled = { fightViewModel.settings.value.soundEnabled },
+                    hapticsEnabled = { fightViewModel.settings.value.hapticsEnabled }
+                )
+            }
+        }
+    )
+    val chatRoomState by chatArenaViewModel.chatState.collectAsStateWithLifecycle()
+    val chatFightState by chatArenaViewModel.fightState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(settings.playerName, economy.equippedGloveId, appearance) {
+        chatArenaViewModel.syncPlayerConfig(
+            playerName = settings.playerName,
+            gloveId = economy.equippedGloveId,
+            appearance = appearance
+        )
+    }
+
+    LaunchedEffect(chatRoomState.activeBoutId) {
+        if (chatRoomState.activeBoutId != null &&
+            navController.currentDestination?.route != AppRoutes.CHAT_FIGHT
+        ) {
+            navController.navigate(AppRoutes.CHAT_FIGHT) {
+                launchSingleTop = true
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = AppRoutes.HUB
@@ -132,6 +169,7 @@ fun RingKoApp(
                 economy = economy,
                 settings = settings,
                 appearance = appearance,
+                chatRoomState = chatRoomState,
                 onAuthSuccess = { currentUser = auth.currentUser },
                 onStartFight = { fighterId ->
                     navController.navigate(AppRoutes.fightRoute(fighterId)) {
@@ -158,6 +196,30 @@ fun RingKoApp(
                         launchSingleTop = true
                     }
                 },
+                onCreateChatRoom = { title ->
+                    chatArenaViewModel.createChatRoom(
+                        roomTitle = title,
+                        playerName = settings.playerName,
+                        gloveId = economy.equippedGloveId,
+                        appearance = appearance
+                    )
+                },
+                onJoinChatRoom = { code ->
+                    chatArenaViewModel.joinChatRoom(
+                        rawCode = code,
+                        playerName = settings.playerName,
+                        gloveId = economy.equippedGloveId,
+                        appearance = appearance
+                    )
+                },
+                onLeaveChatRoom = chatArenaViewModel::leaveChatRoom,
+                onSendChatMessage = chatArenaViewModel::sendChatMessage,
+                onSelectChatCharacter = chatArenaViewModel::selectCharacter,
+                onSelectChatRounds = chatArenaViewModel::selectRounds,
+                onSendChatChallenge = chatArenaViewModel::sendChallenge,
+                onCancelChatChallenge = chatArenaViewModel::cancelOutgoingChallenge,
+                onAcceptChatChallenge = chatArenaViewModel::acceptIncomingChallenge,
+                onDeclineChatChallenge = chatArenaViewModel::declineIncomingChallenge,
                 onBuyOrEquipGlove = fightViewModel::buyOrEquipGlove,
                 onUpdateAppearance = fightViewModel::updateAppearance,
                 onSavePlayerName = fightViewModel::setPlayerName,
@@ -367,6 +429,21 @@ fun RingKoApp(
                     wifiFightViewModel.cancelOrForfeitAndExit {
                         navController.popBackStack()
                     }
+                }
+            )
+        }
+
+        composable(AppRoutes.CHAT_FIGHT) {
+            OnlineFightScreen(
+                state = chatFightState,
+                onMove = chatArenaViewModel::setMoveInput,
+                onSetGuard = chatArenaViewModel::setGuard,
+                onDodge = chatArenaViewModel::dodge,
+                onThrowPunch = chatArenaViewModel::throwPunch,
+                onSkipPresentation = chatArenaViewModel::skipPresentation,
+                onExit = {
+                    chatArenaViewModel.exitFightToChat()
+                    navController.popBackStack()
                 }
             )
         }

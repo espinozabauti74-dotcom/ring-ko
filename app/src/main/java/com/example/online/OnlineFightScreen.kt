@@ -2,6 +2,12 @@ package com.example.online
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -54,6 +60,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -578,6 +586,14 @@ private fun OnlineRingCanvas(
     state: OnlineFightUiState,
     modifier: Modifier = Modifier
 ) {
+    val inf = rememberInfiniteTransition(label = "online_ring_anim")
+    val animPhase by inf.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(1700, easing = LinearEasing), RepeatMode.Restart),
+        label = "breath"
+    )
+
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
@@ -627,14 +643,25 @@ private fun OnlineRingCanvas(
             )
         }
 
-        // Opponent boxer (pixel-art sprite matching arcade stance)
-        val oppCenterX = w * (0.5f + state.oppPosX * 0.36f)
-        val oppFacingRight = state.oppPosX <= state.myPosX
+        val spriteH = h * 0.52f
+        val myCenterX = w * (0.5f + state.myPosX * 0.40f)
+        val oppCenterX = w * (0.5f + state.oppPosX * 0.40f)
+        val myFacingRight = state.myPosX <= state.oppPosX
+        val oppFacingRight = !myFacingRight
+
+        val myBottomY = h * 0.85f
+        val oppBottomY = h * 0.82f
+        val myBob = kotlin.math.abs(sin(animPhase)) * h * 0.015f
+        val oppBob = kotlin.math.abs(sin(animPhase + 1.4f)) * h * 0.015f
+
         val resolvedOppGloveColor = state.oppGloveColorOverride ?: state.oppGlove.primaryColor
+        val resolvedMyGloveColor = state.myGloveColorOverride ?: state.myGlove.primaryColor
+
+        // Draw Opponent pixel-art boxer
         drawPixelArtBoxer(
             centerX = oppCenterX,
-            bottomY = h * 0.69f,
-            spriteHeight = h * 0.44f,
+            bottomY = oppBottomY,
+            spriteHeight = spriteH,
             facingRight = oppFacingRight,
             skinBase = state.oppSkinColor,
             hairColor = state.oppHairColor,
@@ -642,54 +669,68 @@ private fun OnlineRingCanvas(
             gloveColor = resolvedOppGloveColor,
             isGuarding = state.oppGuarding,
             isDodging = state.oppDodging,
+            isKnockedDown = state.oppHp <= 0f,
             activePunch = state.oppActivePunch,
             punchProgress = state.oppPunchProgress,
-            hitFlashAlpha = state.oppHitFlashAlpha
+            hitFlashAlpha = state.oppHitFlashAlpha,
+            bobOffsetPx = oppBob
         )
-
-        // Player foreground pixel-styled boxing gloves
-        val myX = w * (0.5f + state.myPosX * 0.36f) + (if (state.myDodging) -w * 0.06f else 0f)
-        val myY = h * 0.85f
-        val myPunchAdvance = sin((state.myPunchProgress * PI).toDouble()).toFloat() * h * 0.28f
-        val myGuardLift = if (state.myGuarding) -h * 0.10f else 0f
-        val resolvedMyGloveColor = state.myGloveColorOverride ?: state.myGlove.primaryColor
-        val resolvedMyTrimColor = state.myGloveTrimOverride ?: state.myGlove.trimColor
-
-        val leftGloveCenter = Offset(
-            myX - w * 0.11f,
-            myY + myGuardLift - (if (state.myActivePunch?.side == com.example.model.HandSide.LEFT) myPunchAdvance else 0f)
-        )
-        val rightGloveCenter = Offset(
-            myX + w * 0.11f,
-            myY + myGuardLift - (if (state.myActivePunch?.side == com.example.model.HandSide.RIGHT) myPunchAdvance else 0f)
-        )
-        listOf(leftGloveCenter, rightGloveCenter).forEach { center ->
-            val r = w * 0.072f
-            // Wrist cuff
-            drawRoundRect(
-                color = Color(0xFF120E18),
-                topLeft = Offset(center.x - r * 0.68f, center.y + r * 0.45f),
-                size = Size(r * 1.36f, r * 0.65f),
-                cornerRadius = CornerRadius(6f, 6f)
-            )
-            drawRoundRect(
-                color = resolvedMyTrimColor,
-                topLeft = Offset(center.x - r * 0.56f, center.y + r * 0.52f),
-                size = Size(r * 1.12f, r * 0.44f),
-                cornerRadius = CornerRadius(4f, 4f)
-            )
-            // Glove outline & fill
-            drawCircle(color = Color(0xFF120E18), radius = r * 1.1f, center = center)
-            drawCircle(color = resolvedMyGloveColor, radius = r * 0.94f, center = center)
-            drawCircle(
-                color = Color.White.copy(alpha = 0.28f),
-                radius = r * 0.36f,
-                center = Offset(center.x - r * 0.26f, center.y - r * 0.28f)
+        if (state.oppGuarding) {
+            val dir = if (oppFacingRight) 1f else -1f
+            drawArc(
+                color = CobaltGlow.copy(alpha = 0.65f),
+                startAngle = if (oppFacingRight) -65f else 115f,
+                sweepAngle = 130f,
+                useCenter = false,
+                topLeft = Offset(oppCenterX + dir * spriteH * 0.04f - spriteH * 0.24f, oppBottomY - spriteH * 0.88f),
+                size = Size(spriteH * 0.48f, spriteH * 0.46f),
+                style = Stroke(width = 5f)
             )
         }
 
+        // Draw Local Player pixel-art boxer (same sprite design, differing in gloves & trunks)
+        drawPixelArtBoxer(
+            centerX = myCenterX,
+            bottomY = myBottomY,
+            spriteHeight = spriteH,
+            facingRight = myFacingRight,
+            skinBase = state.mySkinColor,
+            hairColor = state.myHairColor,
+            trunksColor = state.myTrunksColor,
+            gloveColor = resolvedMyGloveColor,
+            isGuarding = state.myGuarding,
+            isDodging = state.myDodging,
+            isKnockedDown = state.myHp <= 0f,
+            activePunch = state.myActivePunch,
+            punchProgress = state.myPunchProgress,
+            hitFlashAlpha = state.hitFlashAlpha,
+            bobOffsetPx = myBob
+        )
+        if (state.myGuarding) {
+            val dir = if (myFacingRight) 1f else -1f
+            drawArc(
+                color = StaminaEmerald.copy(alpha = 0.7f),
+                startAngle = if (myFacingRight) -65f else 115f,
+                sweepAngle = 130f,
+                useCenter = false,
+                topLeft = Offset(myCenterX + dir * spriteH * 0.04f - spriteH * 0.24f, myBottomY - spriteH * 0.88f),
+                size = Size(spriteH * 0.48f, spriteH * 0.46f),
+                style = Stroke(width = 5f)
+            )
+        }
+
+        // Subtle gold pointer arrow above your boxer so you always spot yourself
+        val markerY = myBottomY - spriteH - h * 0.03f + myBob
+        val arrowPath = Path().apply {
+            moveTo(myCenterX, markerY + h * 0.025f)
+            lineTo(myCenterX - w * 0.022f, markerY)
+            lineTo(myCenterX + w * 0.022f, markerY)
+            close()
+        }
+        drawPath(arrowPath, color = ChampionshipGold)
+
         if (state.hitFlashAlpha > 0.02f) {
-            drawRect(color = CrimsonCorner.copy(alpha = state.hitFlashAlpha * 0.35f))
+            drawRect(color = CrimsonCorner.copy(alpha = state.hitFlashAlpha * 0.28f))
         }
     }
 }
