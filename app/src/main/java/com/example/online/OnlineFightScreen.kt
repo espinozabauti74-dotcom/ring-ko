@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.CalloutTone
 import com.example.model.PunchType
+import com.example.ui.components.drawPixelArtBoxer
 import com.example.ui.theme.ArenaBorder
 import com.example.ui.theme.ArenaCard
 import com.example.ui.theme.ArenaCardElevated
@@ -626,65 +627,63 @@ private fun OnlineRingCanvas(
             )
         }
 
-        // Opponent boxer (depth-scaled)
-        val oppX = w * (0.5f + state.oppPosX * 0.36f) + (if (state.oppDodging) w * 0.06f else 0f)
-        val oppY = h * 0.48f
-        val bodyColor = CobaltCorner
-        drawRoundRect(
-            color = bodyColor,
-            topLeft = Offset(oppX - w * 0.09f, oppY - h * 0.05f),
-            size = Size(w * 0.18f, h * 0.24f),
-            cornerRadius = CornerRadius(24f, 24f)
-        )
-        drawCircle(
-            color = Color(0xFFD69E76),
-            radius = w * 0.065f,
-            center = Offset(oppX, oppY - h * 0.11f)
-        )
-        if (state.oppHitFlashAlpha > 0.02f) {
-            drawCircle(
-                color = CrimsonCorner.copy(alpha = state.oppHitFlashAlpha),
-                radius = w * 0.09f,
-                center = Offset(oppX, oppY - h * 0.05f)
-            )
-        }
-
-        // Opponent gloves
-        val oppPunchAdvance = sin((state.oppPunchProgress * PI).toDouble()).toFloat() * h * 0.14f
-        val oppGuardOffset = if (state.oppGuarding) -h * 0.05f else 0f
-        drawCircle(
-            color = state.oppGlove.primaryColor,
-            radius = w * 0.048f,
-            center = Offset(oppX - w * 0.075f, oppY + oppGuardOffset + (if (state.oppActivePunch?.side == com.example.model.HandSide.LEFT) oppPunchAdvance else 0f))
-        )
-        drawCircle(
-            color = state.oppGlove.primaryColor,
-            radius = w * 0.048f,
-            center = Offset(oppX + w * 0.075f, oppY + oppGuardOffset + (if (state.oppActivePunch?.side == com.example.model.HandSide.RIGHT) oppPunchAdvance else 0f))
+        // Opponent boxer (pixel-art sprite matching arcade stance)
+        val oppCenterX = w * (0.5f + state.oppPosX * 0.36f)
+        val oppFacingRight = state.oppPosX <= state.myPosX
+        drawPixelArtBoxer(
+            centerX = oppCenterX,
+            bottomY = h * 0.69f,
+            spriteHeight = h * 0.44f,
+            facingRight = oppFacingRight,
+            skinBase = Color(0xFFC47A4C),
+            hairColor = Color(0xFF4A2C1D),
+            trunksColor = CobaltCorner,
+            gloveColor = state.oppGlove.primaryColor,
+            isGuarding = state.oppGuarding,
+            isDodging = state.oppDodging,
+            activePunch = state.oppActivePunch,
+            punchProgress = state.oppPunchProgress,
+            hitFlashAlpha = state.oppHitFlashAlpha
         )
 
-        // Player foreground gloves
+        // Player foreground pixel-styled boxing gloves
         val myX = w * (0.5f + state.myPosX * 0.36f) + (if (state.myDodging) -w * 0.06f else 0f)
-        val myY = h * 0.84f
+        val myY = h * 0.85f
         val myPunchAdvance = sin((state.myPunchProgress * PI).toDouble()).toFloat() * h * 0.28f
         val myGuardLift = if (state.myGuarding) -h * 0.10f else 0f
 
-        drawCircle(
-            color = state.myGlove.primaryColor,
-            radius = w * 0.07f,
-            center = Offset(
-                myX - w * 0.11f,
-                myY + myGuardLift - (if (state.myActivePunch?.side == com.example.model.HandSide.LEFT) myPunchAdvance else 0f)
-            )
+        val leftGloveCenter = Offset(
+            myX - w * 0.11f,
+            myY + myGuardLift - (if (state.myActivePunch?.side == com.example.model.HandSide.LEFT) myPunchAdvance else 0f)
         )
-        drawCircle(
-            color = state.myGlove.primaryColor,
-            radius = w * 0.07f,
-            center = Offset(
-                myX + w * 0.11f,
-                myY + myGuardLift - (if (state.myActivePunch?.side == com.example.model.HandSide.RIGHT) myPunchAdvance else 0f)
-            )
+        val rightGloveCenter = Offset(
+            myX + w * 0.11f,
+            myY + myGuardLift - (if (state.myActivePunch?.side == com.example.model.HandSide.RIGHT) myPunchAdvance else 0f)
         )
+        listOf(leftGloveCenter, rightGloveCenter).forEach { center ->
+            val r = w * 0.072f
+            // Wrist cuff
+            drawRoundRect(
+                color = Color(0xFF120E18),
+                topLeft = Offset(center.x - r * 0.68f, center.y + r * 0.45f),
+                size = Size(r * 1.36f, r * 0.65f),
+                cornerRadius = CornerRadius(6f, 6f)
+            )
+            drawRoundRect(
+                color = state.myGlove.trimColor,
+                topLeft = Offset(center.x - r * 0.56f, center.y + r * 0.52f),
+                size = Size(r * 1.12f, r * 0.44f),
+                cornerRadius = CornerRadius(4f, 4f)
+            )
+            // Glove outline & fill
+            drawCircle(color = Color(0xFF120E18), radius = r * 1.1f, center = center)
+            drawCircle(color = state.myGlove.primaryColor, radius = r * 0.94f, center = center)
+            drawCircle(
+                color = Color.White.copy(alpha = 0.28f),
+                radius = r * 0.36f,
+                center = Offset(center.x - r * 0.26f, center.y - r * 0.28f)
+            )
+        }
 
         if (state.hitFlashAlpha > 0.02f) {
             drawRect(color = CrimsonCorner.copy(alpha = state.hitFlashAlpha * 0.35f))

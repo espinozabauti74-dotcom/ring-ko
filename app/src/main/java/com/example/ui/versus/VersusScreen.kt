@@ -77,6 +77,7 @@ import com.example.game.VersusUiState
 import com.example.model.CalloutTone
 import com.example.model.FightPhase
 import com.example.model.PunchType
+import com.example.ui.components.drawPixelArtBoxer
 import com.example.ui.theme.ArenaBorder
 import com.example.ui.theme.ArenaCard
 import com.example.ui.theme.ArenaCardElevated
@@ -665,84 +666,38 @@ private fun DrawScope.drawSideBoxer(
     trunksColor: Color,
     gloveColor: Color
 ) {
-    val dir = if (facingRight) 1f else -1f
-    val dodgeShift = if (boxer.isDodging) -dir * w * 0.04f else 0f
-    val cx = w * 0.50f + boxer.posX * w * 0.42f + dodgeShift + shakeX
-    val baseFootY = h * 0.86f
-    val dropY = if (boxer.isKnockedDown) h * 0.25f else 0f
-    val bobY = abs(breath) * h * 0.015f
+    val cx = w * 0.50f + boxer.posX * w * 0.42f + shakeX
+    val baseFootY = h * 0.88f
+    val bobY = abs(breath) * h * 0.018f
+    val spriteH = h * 0.54f
 
-    val headR = h * 0.105f
-    val bodyH = h * 0.25f
-    val bodyW = w * 0.085f
-    val hipY = baseFootY - h * 0.20f + dropY
-    val shoulderY = hipY - bodyH + bobY
-    val headY = shoulderY - headR * 1.1f
-
-    // Legs
-    drawLine(Color(0xFFD69E76), Offset(cx - dir * bodyW * 0.25f, hipY), Offset(cx - dir * bodyW * 0.45f, baseFootY), strokeWidth = w * 0.025f, cap = StrokeCap.Round)
-    drawLine(Color(0xFFD69E76), Offset(cx + dir * bodyW * 0.25f, hipY), Offset(cx + dir * bodyW * 0.45f, baseFootY), strokeWidth = w * 0.025f, cap = StrokeCap.Round)
-
-    // Trunks
-    drawRoundRect(
-        color = trunksColor,
-        topLeft = Offset(cx - bodyW * 0.55f, hipY - h * 0.06f),
-        size = Size(bodyW * 1.1f, h * 0.12f),
-        cornerRadius = CornerRadius(12f, 12f)
+    drawPixelArtBoxer(
+        centerX = cx,
+        bottomY = baseFootY,
+        spriteHeight = spriteH,
+        facingRight = facingRight,
+        skinBase = if (facingRight) Color(0xFFC47A4C) else Color(0xFFD69E76),
+        hairColor = if (facingRight) Color(0xFF4A2C1D) else Color(0xFF1D1B24),
+        trunksColor = trunksColor,
+        gloveColor = gloveColor,
+        isGuarding = boxer.isGuarding,
+        isDodging = boxer.isDodging,
+        isKnockedDown = boxer.isKnockedDown,
+        activePunch = boxer.activePunch,
+        punchProgress = boxer.punchProgress,
+        hitFlashAlpha = boxer.hitFlash,
+        bobOffsetPx = bobY
     )
-
-    // Torso
-    drawRoundRect(
-        color = if (boxer.hitFlash > 0.3f) Color.White else Color(0xFFD69E76),
-        topLeft = Offset(cx - bodyW * 0.52f, shoulderY),
-        size = Size(bodyW * 1.04f, bodyH),
-        cornerRadius = CornerRadius(16f, 16f)
-    )
-
-    // Head
-    drawCircle(
-        color = if (boxer.hitFlash > 0.3f) Color.White else Color(0xFFD69E76),
-        radius = headR,
-        center = Offset(cx + dir * bodyW * 0.06f, headY)
-    )
-    // Headband
-    drawRect(
-        color = trunksColor,
-        topLeft = Offset(cx - headR * 0.85f, headY - headR * 0.55f),
-        size = Size(headR * 1.7f, headR * 0.35f)
-    )
-
-    // Glove arm extension
-    val thrust = if (boxer.activePunch != null) sin(boxer.punchProgress * PI.toFloat()).coerceIn(0f, 1f) else 0f
-    val reachPx = when (boxer.activePunch) {
-        PunchType.JAB, PunchType.CROSS -> w * 0.17f
-        PunchType.HOOK -> w * 0.14f
-        PunchType.UPPERCUT -> w * 0.13f
-        null -> 0f
-    }
-    val guardLift = if (boxer.isGuarding) -headR * 0.35f else 0f
-    val punchLift = if (boxer.activePunch == PunchType.UPPERCUT) -headR * 0.55f * thrust else 0f
-    val gloveX = cx + dir * (bodyW * 0.72f + reachPx * thrust)
-    val gloveY = shoulderY + headR * 0.25f + guardLift + punchLift
-
-    drawLine(
-        color = Color(0xFFD69E76),
-        start = Offset(cx + dir * bodyW * 0.2f, shoulderY + h * 0.03f),
-        end = Offset(gloveX, gloveY),
-        strokeWidth = w * 0.022f,
-        cap = StrokeCap.Round
-    )
-    drawCircle(color = gloveColor, radius = h * 0.068f, center = Offset(gloveX, gloveY))
-    drawCircle(color = Color.Black.copy(alpha = 0.3f), radius = h * 0.068f, center = Offset(gloveX, gloveY), style = Stroke(3f))
 
     if (boxer.isGuarding) {
+        val dir = if (facingRight) 1f else -1f
         drawArc(
             color = CobaltGlow.copy(alpha = 0.65f),
             startAngle = if (facingRight) -65f else 115f,
             sweepAngle = 130f,
             useCenter = false,
-            topLeft = Offset(cx - bodyW * 0.9f, headY - headR),
-            size = Size(bodyW * 1.8f, bodyH * 0.9f),
+            topLeft = Offset(cx + dir * spriteH * 0.04f - spriteH * 0.24f, baseFootY - spriteH * 0.88f),
+            size = Size(spriteH * 0.48f, spriteH * 0.46f),
             style = Stroke(width = 5f)
         )
     }
