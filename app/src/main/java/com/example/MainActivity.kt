@@ -48,6 +48,8 @@ import com.example.ui.hub.HubScreen
 import com.example.ui.theme.ArenaObsidian
 import com.example.ui.theme.RingKoTheme
 import com.example.ui.versus.VersusScreen
+import com.example.wifi.WIFI_DEFAULT_PORT
+import com.example.wifi.WifiFightViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
@@ -57,9 +59,12 @@ object AppRoutes {
     const val FIGHT = "fight/{fighterId}"
     const val VERSUS = "versus/{p2Name}/{rounds}"
     const val ONLINE_FIGHT = "online/{matchId}"
+    const val WIFI_FIGHT = "wifi/{role}/{hostIp}/{port}/{rounds}"
     fun fightRoute(fighterId: String): String = "fight/$fighterId"
     fun versusRoute(p2Name: String, rounds: Int): String = "versus/${Uri.encode(p2Name)}/$rounds"
     fun onlineFightRoute(matchId: String): String = "online/${Uri.encode(matchId)}"
+    fun wifiHostRoute(rounds: Int): String = "wifi/host/none/$WIFI_DEFAULT_PORT/$rounds"
+    fun wifiGuestRoute(hostIp: String, port: Int): String = "wifi/guest/${Uri.encode(hostIp)}/$port/3"
 }
 
 class MainActivity : ComponentActivity() {
@@ -136,6 +141,16 @@ fun RingKoApp(
                 },
                 onEnterOnlineMatch = { matchId ->
                     navController.navigate(AppRoutes.onlineFightRoute(matchId)) {
+                        launchSingleTop = true
+                    }
+                },
+                onHostWifiMatch = { rounds ->
+                    navController.navigate(AppRoutes.wifiHostRoute(rounds)) {
+                        launchSingleTop = true
+                    }
+                },
+                onJoinWifiMatch = { hostIp, port ->
+                    navController.navigate(AppRoutes.wifiGuestRoute(hostIp, port)) {
                         launchSingleTop = true
                     }
                 },
@@ -266,6 +281,69 @@ fun RingKoApp(
                     )
                 }
             }
+        }
+
+        composable(
+            route = AppRoutes.WIFI_FIGHT,
+            arguments = listOf(
+                navArgument("role") { type = NavType.StringType },
+                navArgument("hostIp") { type = NavType.StringType },
+                navArgument("port") { type = NavType.IntType },
+                navArgument("rounds") { type = NavType.IntType }
+            )
+        ) { backStackEntry ->
+            val role = backStackEntry.arguments?.getString("role") ?: "host"
+            val hostIp = backStackEntry.arguments?.getString("hostIp") ?: "none"
+            val port = backStackEntry.arguments?.getInt("port") ?: WIFI_DEFAULT_PORT
+            val rounds = backStackEntry.arguments?.getInt("rounds") ?: 3
+
+            val wifiFightViewModel: WifiFightViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        val app = checkNotNull(this[APPLICATION_KEY]) {
+                            "APPLICATION_KEY missing from CreationExtras"
+                        }
+                        WifiFightViewModel(
+                            context = app,
+                            soundEngine = BoxingSoundEngine(app),
+                            soundEnabled = { settings.soundEnabled },
+                            hapticsEnabled = { settings.hapticsEnabled }
+                        )
+                    }
+                }
+            )
+
+            LaunchedEffect(role, hostIp, port, rounds, settings.playerName, economy.equippedGloveId) {
+                if (role == "host") {
+                    wifiFightViewModel.startHost(
+                        myName = settings.playerName,
+                        myGloveId = economy.equippedGloveId,
+                        rounds = rounds
+                    )
+                } else {
+                    wifiFightViewModel.startGuest(
+                        hostIp = hostIp,
+                        port = port,
+                        myName = settings.playerName,
+                        myGloveId = economy.equippedGloveId
+                    )
+                }
+            }
+
+            val wifiState by wifiFightViewModel.uiState.collectAsStateWithLifecycle()
+            OnlineFightScreen(
+                state = wifiState,
+                onMove = wifiFightViewModel::setMoveInput,
+                onSetGuard = wifiFightViewModel::setGuard,
+                onDodge = wifiFightViewModel::dodge,
+                onThrowPunch = wifiFightViewModel::throwPunch,
+                onSkipPresentation = wifiFightViewModel::skipPresentation,
+                onExit = {
+                    wifiFightViewModel.cancelOrForfeitAndExit {
+                        navController.popBackStack()
+                    }
+                }
+            )
         }
     }
 }

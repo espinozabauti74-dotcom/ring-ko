@@ -135,8 +135,9 @@ fun OnlineFightScreen(
                         shape = RoundedCornerShape(999.dp)
                     ) {
                         val secs = (state.roundTimeMs / 1000L).toInt().coerceAtLeast(0)
+                        val roomLabel = if (state.isWifiLocal) "WI-FI LOCAL" else "SALA ${state.matchId}"
                         Text(
-                            text = "SALA ${state.matchId} • R${state.currentRound}/${state.maxRounds} • ${String.format("%02d:%02d", secs / 60, secs % 60)}",
+                            text = "$roomLabel • R${state.currentRound}/${state.maxRounds} • ${String.format("%02d:%02d", secs / 60, secs % 60)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = ChampionshipGold,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -352,14 +353,18 @@ fun OnlineFightScreen(
             OnlineBoutPhase.WAITING_OPPONENT -> {
                 OverlayCard {
                     Text(
-                        text = "ESPERANDO RIVAL ONLINE",
+                        text = if (state.isWifiLocal) "ESPERANDO RIVAL EN WI-FI" else "ESPERANDO RIVAL ONLINE",
                         style = MaterialTheme.typography.headlineMedium,
                         color = ChampionshipGold,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Comparte este código para que tu oponente se una a la pelea:",
+                        text = if (state.isWifiLocal) {
+                            "El otro celular debe estar en el mismo Wi-Fi o Zona Wi-Fi y tocar tu sala, o ingresar esta dirección:"
+                        } else {
+                            "Comparte este código para que tu oponente se una a la pelea:"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MutedSteel,
                         textAlign = TextAlign.Center
@@ -370,11 +375,21 @@ fun OnlineFightScreen(
                         border = BorderStroke(2.dp, ChampionshipGold),
                         shape = RoundedCornerShape(14.dp)
                     ) {
+                        val displayCode = if (state.isWifiLocal && state.wifiAddressHint.isNotBlank()) {
+                            state.wifiAddressHint
+                        } else {
+                            state.matchId
+                        }
                         Text(
-                            text = state.matchId,
-                            style = MaterialTheme.typography.displayLarge.copy(letterSpacing = 6.sp),
+                            text = displayCode,
+                            style = if (state.isWifiLocal) {
+                                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            } else {
+                                MaterialTheme.typography.displayLarge.copy(letterSpacing = 6.sp)
+                            },
                             color = ChampionshipGold,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(14.dp))
@@ -393,7 +408,7 @@ fun OnlineFightScreen(
             OnlineBoutPhase.PRESENTATION -> {
                 OverlayCard {
                     Text(
-                        text = "¡COMBATE ONLINE!",
+                        text = if (state.isWifiLocal) "¡COMBATE WI-FI!" else "¡COMBATE ONLINE!",
                         style = MaterialTheme.typography.headlineLarge,
                         color = ChampionshipGold,
                         textAlign = TextAlign.Center
@@ -436,7 +451,7 @@ fun OnlineFightScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = if (won) "¡VICTORIA ONLINE!" else "DERROTA",
+                        text = if (won) (if (state.isWifiLocal) "¡VICTORIA WI-FI!" else "¡VICTORIA ONLINE!") else "DERROTA",
                         style = MaterialTheme.typography.displaySmall,
                         color = if (won) ChampionshipGold else CrimsonCorner,
                         textAlign = TextAlign.Center

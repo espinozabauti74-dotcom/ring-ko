@@ -68,7 +68,9 @@ data class OnlineFightUiState(
     val errorMessage: String? = null,
     val crowdExcitement: Float = 0.35f,
     val myHitsLanded: Int = 0,
-    val oppHitsLanded: Int = 0
+    val oppHitsLanded: Int = 0,
+    val isWifiLocal: Boolean = false,
+    val wifiAddressHint: String = ""
 )
 
 class OnlineFightViewModel(

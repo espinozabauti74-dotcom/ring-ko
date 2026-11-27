@@ -81,6 +81,7 @@ import com.example.model.GloveShopCatalog
 import com.example.model.PlayerEconomy
 import com.example.model.SessionRecord
 import com.example.online.OnlineLobbySection
+import com.example.wifi.WifiLobbySection
 import com.example.ui.components.FighterAvatarBadge
 import com.example.ui.components.GlovePreviewBadge
 import com.example.ui.theme.ArenaBorder
@@ -105,6 +106,8 @@ fun HubScreen(
     onStartFight: (String) -> Unit,
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit,
+    onHostWifiMatch: (Int) -> Unit,
+    onJoinWifiMatch: (String, Int) -> Unit,
     onBuyOrEquipGlove: (GloveItem) -> Unit,
     onSavePlayerName: (String) -> Unit,
     onToggleSound: (Boolean) -> Unit,
@@ -336,7 +339,9 @@ fun HubScreen(
                     equippedGloveId = economy.equippedGloveId,
                     onAuthSuccess = onAuthSuccess,
                     onStartVersus = onStartVersus,
-                    onEnterOnlineMatch = onEnterOnlineMatch
+                    onEnterOnlineMatch = onEnterOnlineMatch,
+                    onHostWifiMatch = onHostWifiMatch,
+                    onJoinWifiMatch = onJoinWifiMatch
                 )
                 else -> GloveShopTab(
                     economy = economy,
@@ -1065,9 +1070,11 @@ private fun MultiplayerHubTab(
     equippedGloveId: String,
     onAuthSuccess: () -> Unit,
     onStartVersus: (String, Int) -> Unit,
-    onEnterOnlineMatch: (String) -> Unit
+    onEnterOnlineMatch: (String) -> Unit,
+    onHostWifiMatch: (Int) -> Unit,
+    onJoinWifiMatch: (String, Int) -> Unit
 ) {
-    var isOnlineMode by rememberSaveable { mutableStateOf(false) }
+    var versusMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Wi-Fi 1v1, 1 = 1v1 Local, 2 = Online
     var player2Name by rememberSaveable { mutableStateOf("Jugador 2") }
     var selectedRounds by rememberSaveable { mutableIntStateOf(3) }
 
@@ -1078,49 +1085,57 @@ private fun MultiplayerHubTab(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-            OutlinedButton(
-                onClick = { isOnlineMode = false },
-                border = BorderStroke(1.5.dp, if (!isOnlineMode) ChampionshipGold else ArenaBorder),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (!isOnlineMode) ChampionshipGold.copy(alpha = 0.18f) else ArenaCard,
-                    contentColor = if (!isOnlineMode) ChampionshipGold else ChalkWhite
-                ),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .testTag("mode_local_button")
-            ) {
-                Text("1v1 LOCAL", style = MaterialTheme.typography.labelLarge)
-            }
-            OutlinedButton(
-                onClick = { isOnlineMode = true },
-                border = BorderStroke(1.5.dp, if (isOnlineMode) ChampionshipGold else ArenaBorder),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (isOnlineMode) ChampionshipGold.copy(alpha = 0.18f) else ArenaCard,
-                    contentColor = if (isOnlineMode) ChampionshipGold else ChalkWhite
-                ),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .testTag("mode_online_button")
-            ) {
-                Text("ONLINE 1v1", style = MaterialTheme.typography.labelLarge)
+            listOf(
+                Triple(0, "WI-FI 1v1", "mode_wifi_button"),
+                Triple(1, "1v1 LOCAL", "mode_local_button"),
+                Triple(2, "ONLINE", "mode_online_button")
+            ).forEach { (mode, label, tag) ->
+                val selected = versusMode == mode
+                OutlinedButton(
+                    onClick = { versusMode = mode },
+                    border = BorderStroke(1.5.dp, if (selected) ChampionshipGold else ArenaBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (selected) ChampionshipGold.copy(alpha = 0.18f) else ArenaCard,
+                        contentColor = if (selected) ChampionshipGold else ChalkWhite
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag(tag)
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (isOnlineMode) {
-            OnlineLobbySection(
-                currentUser = currentUser,
-                playerName = player1Name,
-                equippedGloveId = equippedGloveId,
-                onAuthSuccess = onAuthSuccess,
-                onEnterOnlineMatch = onEnterOnlineMatch
-            )
-            return
+        when (versusMode) {
+            0 -> {
+                WifiLobbySection(
+                    playerName = player1Name,
+                    onHostMatch = onHostWifiMatch,
+                    onJoinMatch = onJoinWifiMatch
+                )
+                return
+            }
+            2 -> {
+                OnlineLobbySection(
+                    currentUser = currentUser,
+                    playerName = player1Name,
+                    equippedGloveId = equippedGloveId,
+                    onAuthSuccess = onAuthSuccess,
+                    onEnterOnlineMatch = onEnterOnlineMatch
+                )
+                return
+            }
         }
 
         Column(
