@@ -28,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +46,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
 import com.example.ui.theme.ArenaCard
 import com.example.ui.theme.ArenaObsidian
@@ -144,8 +142,7 @@ fun onGoogleSignInClicked(
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
-    onAuthCancelled: (String?) -> Unit = {},
-    forceAccountPickerDialog: Boolean = false
+    onAuthCancelled: (String?) -> Unit = {}
 ) {
     val clientId = try {
         context.getString(R.string.default_web_client_id)
@@ -161,37 +158,6 @@ fun onGoogleSignInClicked(
             return@launch
         }
         val uiContext = MutableContextWrapper(activity)
-
-        if (!forceAccountPickerDialog) {
-            val deviceAccountsOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(clientId)
-                .setAutoSelectEnabled(false)
-                .build()
-            val oneTapRequest = GetCredentialRequest.Builder()
-                .addCredentialOption(deviceAccountsOption)
-                .build()
-            try {
-                val cred = credentialManager.getCredential(uiContext, oneTapRequest).credential
-                if (signInWithGoogleCredential(cred)) {
-                    onAuthSuccess()
-                } else {
-                    onAuthError("Tipo de credencial inesperado al validar tu cuenta.")
-                }
-                return@launch
-            } catch (e: GetCredentialCancellationException) {
-                Log.w("Auth", "Google One-Tap cancelled or dismissed: ${e.message}", e)
-                onAuthCancelled(
-                    "No se completó el inicio de sesión. Toca 'ELEGIR CUENTA DE GOOGLE' otra vez o usa 'Usar o agregar otra cuenta'."
-                )
-                return@launch
-            } catch (_: NoCredentialException) {
-                // Fall through to explicit Sign In With Google sheet below
-            } catch (e: Exception) {
-                Log.w("Auth", "Device account picker unavailable, falling back to SignInWithGoogle: ${e.message}")
-            }
-        }
-
         val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
         val buttonRequest = GetCredentialRequest.Builder()
             .addCredentialOption(signInOption)
@@ -205,8 +171,9 @@ fun onGoogleSignInClicked(
             }
         } catch (e: GetCredentialCancellationException) {
             Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
+            val detail = e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
             onAuthCancelled(
-                "El inicio de sesión fue cancelado o no se completó en Google. Inténtalo de nuevo."
+                "El inicio de sesión fue cancelado o rechazado por Google$detail. Verifica tu cuenta de Google en el dispositivo o usa 1v1 Local."
             )
         } catch (e: Exception) {
             Log.e("Auth", "Google Sign-In failed", e)
@@ -319,8 +286,7 @@ fun GoogleSignInGateCard(
                         onAuthCancelled = { msg ->
                             isLoading = false
                             errorMessage = msg
-                        },
-                        forceAccountPickerDialog = false
+                        }
                     )
                 },
                 enabled = !isLoading,
@@ -357,39 +323,6 @@ fun GoogleSignInGateCard(
                         )
                     }
                 }
-            }
-
-            TextButton(
-                onClick = {
-                    errorMessage = null
-                    isLoading = true
-                    onGoogleSignInClicked(
-                        context = context,
-                        credentialManager = credentialManager,
-                        onAuthSuccess = {
-                            isLoading = false
-                            onAuthSuccess()
-                        },
-                        onAuthError = { msg ->
-                            isLoading = false
-                            errorMessage = msg
-                        },
-                        scope = scope,
-                        onAuthCancelled = { msg ->
-                            isLoading = false
-                            errorMessage = msg
-                        },
-                        forceAccountPickerDialog = true
-                    )
-                },
-                enabled = !isLoading,
-                modifier = Modifier.testTag("google_other_account_button")
-            ) {
-                Text(
-                    text = "Usar o agregar otra cuenta de Google",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ChampionshipGold
-                )
             }
 
             Text(

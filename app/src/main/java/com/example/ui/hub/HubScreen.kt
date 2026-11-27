@@ -1067,7 +1067,7 @@ private fun MultiplayerHubTab(
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit
 ) {
-    var isOnlineMode by rememberSaveable { mutableStateOf(true) }
+    var isOnlineMode by rememberSaveable { mutableStateOf(false) }
     var player2Name by rememberSaveable { mutableStateOf("Jugador 2") }
     var selectedRounds by rememberSaveable { mutableIntStateOf(3) }
 
@@ -1078,21 +1078,6 @@ private fun MultiplayerHubTab(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-            OutlinedButton(
-                onClick = { isOnlineMode = true },
-                border = BorderStroke(1.5.dp, if (isOnlineMode) ChampionshipGold else ArenaBorder),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (isOnlineMode) ChampionshipGold.copy(alpha = 0.18f) else ArenaCard,
-                    contentColor = if (isOnlineMode) ChampionshipGold else ChalkWhite
-                ),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .testTag("mode_online_button")
-            ) {
-                Text("ONLINE 1v1", style = MaterialTheme.typography.labelLarge)
-            }
             OutlinedButton(
                 onClick = { isOnlineMode = false },
                 border = BorderStroke(1.5.dp, if (!isOnlineMode) ChampionshipGold else ArenaBorder),
@@ -1107,6 +1092,21 @@ private fun MultiplayerHubTab(
                     .testTag("mode_local_button")
             ) {
                 Text("1v1 LOCAL", style = MaterialTheme.typography.labelLarge)
+            }
+            OutlinedButton(
+                onClick = { isOnlineMode = true },
+                border = BorderStroke(1.5.dp, if (isOnlineMode) ChampionshipGold else ArenaBorder),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (isOnlineMode) ChampionshipGold.copy(alpha = 0.18f) else ArenaCard,
+                    contentColor = if (isOnlineMode) ChampionshipGold else ChalkWhite
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .testTag("mode_online_button")
+            ) {
+                Text("ONLINE 1v1", style = MaterialTheme.typography.labelLarge)
             }
         }
 
