@@ -630,15 +630,16 @@ private fun OnlineRingCanvas(
         // Opponent boxer (pixel-art sprite matching arcade stance)
         val oppCenterX = w * (0.5f + state.oppPosX * 0.36f)
         val oppFacingRight = state.oppPosX <= state.myPosX
+        val resolvedOppGloveColor = state.oppGloveColorOverride ?: state.oppGlove.primaryColor
         drawPixelArtBoxer(
             centerX = oppCenterX,
             bottomY = h * 0.69f,
             spriteHeight = h * 0.44f,
             facingRight = oppFacingRight,
-            skinBase = Color(0xFFC47A4C),
-            hairColor = Color(0xFF4A2C1D),
-            trunksColor = CobaltCorner,
-            gloveColor = state.oppGlove.primaryColor,
+            skinBase = state.oppSkinColor,
+            hairColor = state.oppHairColor,
+            trunksColor = state.oppTrunksColor,
+            gloveColor = resolvedOppGloveColor,
             isGuarding = state.oppGuarding,
             isDodging = state.oppDodging,
             activePunch = state.oppActivePunch,
@@ -651,6 +652,8 @@ private fun OnlineRingCanvas(
         val myY = h * 0.85f
         val myPunchAdvance = sin((state.myPunchProgress * PI).toDouble()).toFloat() * h * 0.28f
         val myGuardLift = if (state.myGuarding) -h * 0.10f else 0f
+        val resolvedMyGloveColor = state.myGloveColorOverride ?: state.myGlove.primaryColor
+        val resolvedMyTrimColor = state.myGloveTrimOverride ?: state.myGlove.trimColor
 
         val leftGloveCenter = Offset(
             myX - w * 0.11f,
@@ -670,14 +673,14 @@ private fun OnlineRingCanvas(
                 cornerRadius = CornerRadius(6f, 6f)
             )
             drawRoundRect(
-                color = state.myGlove.trimColor,
+                color = resolvedMyTrimColor,
                 topLeft = Offset(center.x - r * 0.56f, center.y + r * 0.52f),
                 size = Size(r * 1.12f, r * 0.44f),
                 cornerRadius = CornerRadius(4f, 4f)
             )
             // Glove outline & fill
             drawCircle(color = Color(0xFF120E18), radius = r * 1.1f, center = center)
-            drawCircle(color = state.myGlove.primaryColor, radius = r * 0.94f, center = center)
+            drawCircle(color = resolvedMyGloveColor, radius = r * 0.94f, center = center)
             drawCircle(
                 color = Color.White.copy(alpha = 0.28f),
                 radius = r * 0.36f,

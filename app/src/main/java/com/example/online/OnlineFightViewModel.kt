@@ -1,6 +1,7 @@
 package com.example.online
 
 import android.util.Log
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.BoxingSoundEngine
@@ -70,7 +71,16 @@ data class OnlineFightUiState(
     val myHitsLanded: Int = 0,
     val oppHitsLanded: Int = 0,
     val isWifiLocal: Boolean = false,
-    val wifiAddressHint: String = ""
+    val wifiAddressHint: String = "",
+    val mySkinColor: Color = Color(0xFFC47A4C),
+    val myHairColor: Color = Color(0xFF4A2C1D),
+    val myTrunksColor: Color = Color(0xFFD62828),
+    val myGloveColorOverride: Color? = null,
+    val myGloveTrimOverride: Color? = null,
+    val oppSkinColor: Color = Color(0xFFC47A4C),
+    val oppHairColor: Color = Color(0xFF4A2C1D),
+    val oppTrunksColor: Color = Color(0xFF1D4ED8),
+    val oppGloveColorOverride: Color? = null
 )
 
 class OnlineFightViewModel(

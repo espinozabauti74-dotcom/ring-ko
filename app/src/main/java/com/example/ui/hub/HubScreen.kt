@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -72,8 +73,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.UserSettings
+import com.example.model.BoxerAppearance
 import com.example.model.FighterProfile
 import com.example.model.FighterRoster
 import com.example.model.GloveItem
@@ -102,18 +105,20 @@ fun HubScreen(
     sessionRecord: SessionRecord,
     economy: PlayerEconomy,
     settings: UserSettings,
+    appearance: BoxerAppearance,
     onAuthSuccess: () -> Unit,
     onStartFight: (String) -> Unit,
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit,
-    onHostWifiMatch: (Int) -> Unit,
-    onJoinWifiMatch: (String, Int) -> Unit,
+    onHostWifiMatch: (Int, String) -> Unit,
+    onJoinWifiMatch: (String, Int, String) -> Unit,
     onBuyOrEquipGlove: (GloveItem) -> Unit,
+    onUpdateAppearance: (BoxerAppearance) -> Unit,
     onSavePlayerName: (String) -> Unit,
     onToggleSound: (Boolean) -> Unit,
     onToggleHaptics: (Boolean) -> Unit
 ) {
-    var activeTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Combate, 1 = Versus, 2 = Tienda
+    var activeTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Combate, 1 = Versus, 2 = Skins, 3 = Tienda
     var selectedFighterId by rememberSaveable { mutableStateOf(FighterRoster.fighters.first().id) }
     var showSettings by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
@@ -229,7 +234,7 @@ fun HubScreen(
                             border = BorderStroke(1.dp, ChampionshipGold.copy(alpha = 0.65f)),
                             shape = RoundedCornerShape(999.dp),
                             modifier = Modifier
-                                .clickable { activeTab = 2 }
+                                .clickable { activeTab = 3 }
                                 .testTag("coins_badge")
                         ) {
                             Row(
@@ -283,7 +288,7 @@ fun HubScreen(
                 }
             }
 
-            // Segmented Main Menu Navigation (Combate / 1v1 Local / Tienda)
+            // Segmented Main Menu Navigation (Combate / Versus / Skins / Tienda)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
@@ -297,7 +302,7 @@ fun HubScreen(
                     onClick = { activeTab = 0 },
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(54.dp)
                         .testTag("tab_combate")
                 )
                 MenuTabButton(
@@ -307,17 +312,27 @@ fun HubScreen(
                     onClick = { activeTab = 1 },
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(54.dp)
                         .testTag("tab_versus")
                 )
                 MenuTabButton(
-                    label = "TIENDA",
-                    icon = Icons.Default.ShoppingBag,
+                    label = "SKINS",
+                    icon = Icons.Default.Palette,
                     selected = activeTab == 2,
                     onClick = { activeTab = 2 },
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(54.dp)
+                        .testTag("tab_skins")
+                )
+                MenuTabButton(
+                    label = "TIENDA",
+                    icon = Icons.Default.ShoppingBag,
+                    selected = activeTab == 3,
+                    onClick = { activeTab = 3 },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp)
                         .testTag("tab_tienda")
                 )
             }
@@ -331,17 +346,24 @@ fun HubScreen(
                     selectedFighter = selectedFighter,
                     onSelectFighter = { selectedFighterId = it },
                     onStartFight = onStartFight,
-                    onOpenShop = { activeTab = 2 }
+                    onOpenShop = { activeTab = 3 }
                 )
                 1 -> MultiplayerHubTab(
                     currentUser = currentUser,
                     player1Name = settings.playerName,
-                    equippedGloveId = economy.equippedGloveId,
+                    equippedGlove = economy.equippedGlove,
+                    appearance = appearance,
                     onAuthSuccess = onAuthSuccess,
                     onStartVersus = onStartVersus,
                     onEnterOnlineMatch = onEnterOnlineMatch,
                     onHostWifiMatch = onHostWifiMatch,
                     onJoinWifiMatch = onJoinWifiMatch
+                )
+                2 -> SkinsTab(
+                    playerName = settings.playerName,
+                    appearance = appearance,
+                    equippedGlove = economy.equippedGlove,
+                    onUpdateAppearance = onUpdateAppearance
                 )
                 else -> GloveShopTab(
                     economy = economy,
@@ -392,10 +414,10 @@ private fun MenuTabButton(
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 10.dp)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -403,10 +425,13 @@ private fun MenuTabButton(
                 tint = if (selected) ArenaObsidian else ChalkWhite,
                 modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
                 color = if (selected) ArenaObsidian else ChalkWhite,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1067,12 +1092,13 @@ private fun UsernameDialog(
 private fun MultiplayerHubTab(
     currentUser: FirebaseUser?,
     player1Name: String,
-    equippedGloveId: String,
+    equippedGlove: GloveItem,
+    appearance: BoxerAppearance,
     onAuthSuccess: () -> Unit,
     onStartVersus: (String, Int) -> Unit,
     onEnterOnlineMatch: (String) -> Unit,
-    onHostWifiMatch: (Int) -> Unit,
-    onJoinWifiMatch: (String, Int) -> Unit
+    onHostWifiMatch: (Int, String) -> Unit,
+    onJoinWifiMatch: (String, Int, String) -> Unit
 ) {
     var versusMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Wi-Fi 1v1, 1 = 1v1 Local, 2 = Online
     var player2Name by rememberSaveable { mutableStateOf("Jugador 2") }
@@ -1121,6 +1147,8 @@ private fun MultiplayerHubTab(
             0 -> {
                 WifiLobbySection(
                     playerName = player1Name,
+                    appearance = appearance,
+                    equippedGlove = equippedGlove,
                     onHostMatch = onHostWifiMatch,
                     onJoinMatch = onJoinWifiMatch
                 )
@@ -1130,7 +1158,7 @@ private fun MultiplayerHubTab(
                 OnlineLobbySection(
                     currentUser = currentUser,
                     playerName = player1Name,
-                    equippedGloveId = equippedGloveId,
+                    equippedGloveId = equippedGlove.id,
                     onAuthSuccess = onAuthSuccess,
                     onEnterOnlineMatch = onEnterOnlineMatch
                 )

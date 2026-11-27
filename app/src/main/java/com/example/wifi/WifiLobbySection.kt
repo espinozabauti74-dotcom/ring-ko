@@ -1,7 +1,10 @@
 package com.example.wifi
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,12 +48,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.model.BoxerAppearance
+import com.example.model.FighterRoster
+import com.example.model.GloveItem
+import com.example.ui.components.drawPixelArtBoxer
 import com.example.ui.theme.ArenaBorder
 import com.example.ui.theme.ArenaCard
 import com.example.ui.theme.ArenaCardElevated
@@ -64,8 +75,10 @@ import com.example.ui.theme.StaminaEmerald
 @Composable
 fun WifiLobbySection(
     playerName: String,
-    onHostMatch: (rounds: Int) -> Unit,
-    onJoinMatch: (hostIp: String, port: Int) -> Unit
+    appearance: BoxerAppearance,
+    equippedGlove: GloveItem,
+    onHostMatch: (rounds: Int, characterId: String) -> Unit,
+    onJoinMatch: (hostIp: String, port: Int, characterId: String) -> Unit
 ) {
     val context = LocalContext.current
     val discoveryManager = remember(context) { WifiDiscoveryManager(context) }
@@ -78,6 +91,7 @@ fun WifiLobbySection(
     val rooms by discoveryManager.rooms.collectAsStateWithLifecycle()
     val isScanning by discoveryManager.isScanning.collectAsStateWithLifecycle()
 
+    var selectedCharacterId by rememberSaveable { mutableStateOf("custom") }
     var selectedRounds by rememberSaveable { mutableIntStateOf(3) }
     var manualAddress by rememberSaveable { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
@@ -146,6 +160,79 @@ fun WifiLobbySection(
             }
         }
 
+        // Character Selector for Wi-Fi 1v1
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = ArenaCard),
+                border = BorderStroke(1.dp, ArenaBorder),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(vertical = 14.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text(
+                            text = "ELIGE TU PERSONAJE",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = ChalkWhite
+                        )
+                        val selectedLabel = if (selectedCharacterId == "custom") {
+                            "Mi Skin"
+                        } else {
+                            FighterRoster.byId(selectedCharacterId).name
+                        }
+                        Text(
+                            text = selectedLabel,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = ChampionshipGold
+                        )
+                    }
+
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item(key = "custom") {
+                            WifiFighterChoiceCard(
+                                id = "custom",
+                                title = "Mi Skin",
+                                badge = "PERSONAL",
+                                accentColor = ChampionshipGold,
+                                skinColor = appearance.resolvedSkinColor(),
+                                hairColor = appearance.resolvedHairColor(),
+                                trunksColor = appearance.resolvedTrunksColor(),
+                                gloveColor = equippedGlove.primaryColor,
+                                selected = selectedCharacterId == "custom",
+                                onSelect = { selectedCharacterId = "custom" }
+                            )
+                        }
+                        items(FighterRoster.fighters, key = { it.id }) { fighter ->
+                            WifiFighterChoiceCard(
+                                id = fighter.id,
+                                title = fighter.name,
+                                badge = fighter.difficultyLabel,
+                                accentColor = fighter.accentColor,
+                                skinColor = fighter.skinTone,
+                                hairColor = fighter.hairColor,
+                                trunksColor = fighter.trunksColor,
+                                gloveColor = fighter.gloveColor,
+                                selected = selectedCharacterId == fighter.id,
+                                onSelect = { selectedCharacterId = fighter.id }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Create Room Card
         item {
             Card(
@@ -185,7 +272,7 @@ fun WifiLobbySection(
                     }
 
                     Button(
-                        onClick = { onHostMatch(selectedRounds) },
+                        onClick = { onHostMatch(selectedRounds, selectedCharacterId) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = ChampionshipGold,
                             contentColor = ArenaObsidian
@@ -304,7 +391,7 @@ fun WifiLobbySection(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
-                            onClick = { onJoinMatch(room.hostIp, room.port) },
+                            onClick = { onJoinMatch(room.hostIp, room.port, selectedCharacterId) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = ChampionshipGold,
                                 contentColor = ArenaObsidian
@@ -381,7 +468,7 @@ fun WifiLobbySection(
                                 if (parsed == null) {
                                     inputError = "Ingresa una IP válida (ej. 192.168.1.42)"
                                 } else {
-                                    onJoinMatch(parsed.first, parsed.second)
+                                    onJoinMatch(parsed.first, parsed.second, selectedCharacterId)
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -398,6 +485,80 @@ fun WifiLobbySection(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WifiFighterChoiceCard(
+    id: String,
+    title: String,
+    badge: String,
+    accentColor: Color,
+    skinColor: Color,
+    hairColor: Color,
+    trunksColor: Color,
+    gloveColor: Color,
+    selected: Boolean,
+    onSelect: () -> Unit
+) {
+    Surface(
+        color = if (selected) ArenaCardElevated else ArenaObsidian.copy(alpha = 0.72f),
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) accentColor else ArenaBorder
+        ),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .width(106.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onSelect)
+            .testTag("wifi_char_$id")
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(66.dp)
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawPixelArtBoxer(
+                        centerX = size.width * 0.5f,
+                        bottomY = size.height * 0.94f,
+                        spriteHeight = size.height * 0.90f,
+                        facingRight = true,
+                        skinBase = skinColor,
+                        hairColor = hairColor,
+                        trunksColor = trunksColor,
+                        gloveColor = gloveColor
+                    )
+                }
+            }
+            Surface(
+                color = accentColor.copy(alpha = 0.18f),
+                shape = RoundedCornerShape(5.dp)
+            ) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = if (selected) ChalkWhite else MutedSteel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.audio.BoxingSoundEngine
 import com.example.data.SettingsRepository
 import com.example.data.UserSettings
+import com.example.model.BoxerAppearance
 import com.example.model.CalloutTone
 import com.example.model.DodgeDirection
 import com.example.model.EnemyAttackType
@@ -46,6 +47,9 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
 
     val economy: StateFlow<PlayerEconomy> = settingsRepository.economyFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlayerEconomy())
+
+    val appearance: StateFlow<BoxerAppearance> = settingsRepository.appearanceFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, BoxerAppearance())
 
     private val _sessionRecord = MutableStateFlow(SessionRecord())
     val sessionRecord: StateFlow<SessionRecord> = _sessionRecord.asStateFlow()
@@ -111,6 +115,12 @@ class FightViewModel(application: Application) : AndroidViewModel(application) {
     fun buyOrEquipGlove(glove: GloveItem) {
         viewModelScope.launch {
             settingsRepository.buyOrEquipGlove(glove)
+        }
+    }
+
+    fun updateAppearance(appearance: BoxerAppearance) {
+        viewModelScope.launch {
+            settingsRepository.saveAppearance(appearance)
         }
     }
 

@@ -31,17 +31,27 @@ class ExampleRobolectricTest {
     assertEquals("El Rulos", mateo.nickname)
     assertEquals("DIFÍCIL", mateo.difficultyLabel)
     val benja = com.example.model.FighterRoster.byId("bruno")
+    assertEquals("Benja Rodríguez", benja.name)
     assertEquals("El Black", benja.nickname)
+    assertEquals("CAMPEÓN", benja.difficultyLabel)
     assertEquals(androidx.compose.ui.graphics.Color(0xFF141418), benja.gloveColor)
+    val bautista = com.example.model.FighterRoster.byId("diego")
+    assertEquals("Bautista Espinoza", bautista.name)
+    assertEquals("LEYENDA", bautista.difficultyLabel)
   }
 
   @Test
-  fun `glove shop catalog and 10 rounds are configured`() {
+  fun `glove shop catalog, skins, and 10 rounds are configured`() {
     val gloves = com.example.model.GloveShopCatalog.gloves
     assertEquals(5, gloves.size)
     assertEquals(0, gloves.first().priceCoins)
     val initialState = com.example.model.FightUiState()
     assertEquals(10, initialState.maxRounds)
     assertEquals(com.example.model.FightPhase.PRESENTATION, initialState.phase)
+    assertEquals(6, com.example.model.BoxerSkinCatalog.presets.size)
+    val customSkin = com.example.model.BoxerAppearance(skinToneIndex = 3, hairColorIndex = 2, trunksColorIndex = 4)
+    assertEquals(com.example.model.BoxerSkinCatalog.skinTones[3].color, customSkin.resolvedSkinColor())
+    assertEquals(com.example.model.BoxerSkinCatalog.hairColors[2].color, customSkin.resolvedHairColor())
+    assertEquals(com.example.model.BoxerSkinCatalog.trunksColors[4].color, customSkin.resolvedTrunksColor())
   }
 }

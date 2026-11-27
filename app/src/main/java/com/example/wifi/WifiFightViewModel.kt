@@ -1,10 +1,14 @@
 package com.example.wifi
 
 import android.content.Context
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.BoxingSoundEngine
+import com.example.model.BoxerAppearance
 import com.example.model.CalloutTone
+import com.example.model.FighterRoster
 import com.example.model.GloveShopCatalog
 import com.example.model.PunchType
 import com.example.online.OnlineBoutPhase
@@ -53,29 +57,36 @@ class WifiFightViewModel(
     fun startHost(
         myName: String,
         myGloveId: String,
-        rounds: Int
+        rounds: Int,
+        characterId: String = "custom",
+        appearance: BoxerAppearance = BoxerAppearance()
     ) {
-        val key = "host:$myName:$myGloveId:$rounds"
+        val key = "host:$myName:$myGloveId:$rounds:$characterId:${appearance.skinToneIndex}:${appearance.hairColorIndex}:${appearance.trunksColorIndex}"
         if (startedKey == key && _uiState.value.phase != OnlineBoutPhase.ERROR) return
         resetCounters(key)
 
+        val localProfile = buildLocalProfile(myName, myGloveId, characterId, appearance)
         val myGlove = GloveShopCatalog.byId(myGloveId)
         _uiState.value = OnlineFightUiState(
             matchId = "WI-FI",
             phase = OnlineBoutPhase.LOADING,
             isHost = true,
-            myName = myName,
+            myName = localProfile.name,
             oppName = "Esperando rival...",
             myGlove = myGlove,
             maxRounds = rounds,
             myPosX = -0.35f,
             oppPosX = 0.35f,
-            isWifiLocal = true
+            isWifiLocal = true,
+            mySkinColor = Color(localProfile.skinArgb),
+            myHairColor = Color(localProfile.hairArgb),
+            myTrunksColor = Color(localProfile.trunksArgb),
+            myGloveColorOverride = Color(localProfile.gloveArgb),
+            myGloveTrimOverride = Color(localProfile.trimArgb)
         )
 
         transport.startHost(
-            hostName = myName,
-            hostGloveId = myGloveId,
+            localProfile = localProfile,
             rounds = rounds,
             onWaiting = { ips, port ->
                 val hint = if (ips.isEmpty()) {
@@ -90,10 +101,9 @@ class WifiFightViewModel(
                     )
                 }
             },
-            onConnected = { oppName, oppGloveId ->
+            onConnected = { oppProfile ->
                 enterPresentation(
-                    oppName = oppName,
-                    oppGloveId = oppGloveId,
+                    oppProfile = oppProfile,
                     rounds = rounds
                 )
             },
@@ -112,35 +122,41 @@ class WifiFightViewModel(
         hostIp: String,
         port: Int,
         myName: String,
-        myGloveId: String
+        myGloveId: String,
+        characterId: String = "custom",
+        appearance: BoxerAppearance = BoxerAppearance()
     ) {
-        val key = "guest:$hostIp:$port:$myName:$myGloveId"
+        val key = "guest:$hostIp:$port:$myName:$myGloveId:$characterId:${appearance.skinToneIndex}:${appearance.hairColorIndex}:${appearance.trunksColorIndex}"
         if (startedKey == key && _uiState.value.phase != OnlineBoutPhase.ERROR) return
         resetCounters(key)
 
+        val localProfile = buildLocalProfile(myName, myGloveId, characterId, appearance)
         val myGlove = GloveShopCatalog.byId(myGloveId)
         _uiState.value = OnlineFightUiState(
             matchId = "WI-FI",
             phase = OnlineBoutPhase.LOADING,
             isHost = false,
-            myName = myName,
+            myName = localProfile.name,
             oppName = "Conectando...",
             myGlove = myGlove,
             myPosX = 0.35f,
             oppPosX = -0.35f,
             isWifiLocal = true,
-            wifiAddressHint = "$hostIp:$port"
+            wifiAddressHint = "$hostIp:$port",
+            mySkinColor = Color(localProfile.skinArgb),
+            myHairColor = Color(localProfile.hairArgb),
+            myTrunksColor = Color(localProfile.trunksArgb),
+            myGloveColorOverride = Color(localProfile.gloveArgb),
+            myGloveTrimOverride = Color(localProfile.trimArgb)
         )
 
         transport.startGuest(
             hostIp = hostIp,
             port = port,
-            guestName = myName,
-            guestGloveId = myGloveId,
-            onConnected = { oppName, oppGloveId, rounds ->
+            localProfile = localProfile,
+            onConnected = { oppProfile, rounds ->
                 enterPresentation(
-                    oppName = oppName,
-                    oppGloveId = oppGloveId,
+                    oppProfile = oppProfile,
                     rounds = rounds
                 )
             },
@@ -152,6 +168,38 @@ class WifiFightViewModel(
                 }
             },
             onDisconnected = ::handlePeerDisconnected
+        )
+    }
+
+    private fun buildLocalProfile(
+        playerName: String,
+        gloveId: String,
+        characterId: String,
+        appearance: BoxerAppearance
+    ): WifiPeerProfile {
+        val glove = GloveShopCatalog.byId(gloveId)
+        if (characterId == "custom" || characterId.isBlank()) {
+            return WifiPeerProfile(
+                name = playerName.trim().ifBlank { "Retador" },
+                gloveId = gloveId,
+                characterId = "custom",
+                skinArgb = appearance.resolvedSkinColor().toArgb(),
+                hairArgb = appearance.resolvedHairColor().toArgb(),
+                trunksArgb = appearance.resolvedTrunksColor().toArgb(),
+                gloveArgb = glove.primaryColor.toArgb(),
+                trimArgb = glove.trimColor.toArgb()
+            )
+        }
+        val fighter = FighterRoster.byId(characterId)
+        return WifiPeerProfile(
+            name = fighter.name,
+            gloveId = gloveId,
+            characterId = fighter.id,
+            skinArgb = fighter.skinTone.toArgb(),
+            hairArgb = fighter.hairColor.toArgb(),
+            trunksArgb = fighter.trunksColor.toArgb(),
+            gloveArgb = fighter.gloveColor.toArgb(),
+            trimArgb = fighter.accentColor.toArgb()
         )
     }
 
@@ -174,8 +222,7 @@ class WifiFightViewModel(
     }
 
     private fun enterPresentation(
-        oppName: String,
-        oppGloveId: String,
+        oppProfile: WifiPeerProfile,
         rounds: Int
     ) {
         presentationRemainingMs = 2600L
@@ -183,8 +230,12 @@ class WifiFightViewModel(
         _uiState.update {
             it.copy(
                 phase = OnlineBoutPhase.PRESENTATION,
-                oppName = oppName,
-                oppGlove = GloveShopCatalog.byId(oppGloveId),
+                oppName = oppProfile.name,
+                oppGlove = GloveShopCatalog.byId(oppProfile.gloveId),
+                oppSkinColor = Color(oppProfile.skinArgb),
+                oppHairColor = Color(oppProfile.hairArgb),
+                oppTrunksColor = Color(oppProfile.trunksArgb),
+                oppGloveColorOverride = Color(oppProfile.gloveArgb),
                 maxRounds = rounds,
                 currentRound = 1,
                 roundTimeMs = 35_000L,

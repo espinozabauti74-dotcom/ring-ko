@@ -589,9 +589,7 @@ private fun VersusRingCanvas(
                 w = w,
                 h = h,
                 shakeX = shakeX,
-                breath = sin(animPhase),
-                trunksColor = CrimsonCorner,
-                gloveColor = CrimsonCorner
+                breath = sin(animPhase)
             )
             drawSideBoxer(
                 boxer = state.p2,
@@ -599,9 +597,7 @@ private fun VersusRingCanvas(
                 w = w,
                 h = h,
                 shakeX = shakeX,
-                breath = -sin(animPhase),
-                trunksColor = CobaltCorner,
-                gloveColor = CobaltGlow
+                breath = -sin(animPhase)
             )
 
             // Sparks
@@ -662,9 +658,7 @@ private fun DrawScope.drawSideBoxer(
     w: Float,
     h: Float,
     shakeX: Float,
-    breath: Float,
-    trunksColor: Color,
-    gloveColor: Color
+    breath: Float
 ) {
     val cx = w * 0.50f + boxer.posX * w * 0.42f + shakeX
     val baseFootY = h * 0.88f
@@ -676,10 +670,10 @@ private fun DrawScope.drawSideBoxer(
         bottomY = baseFootY,
         spriteHeight = spriteH,
         facingRight = facingRight,
-        skinBase = if (facingRight) Color(0xFFC47A4C) else Color(0xFFD69E76),
-        hairColor = if (facingRight) Color(0xFF4A2C1D) else Color(0xFF1D1B24),
-        trunksColor = trunksColor,
-        gloveColor = gloveColor,
+        skinBase = boxer.skinColor,
+        hairColor = boxer.hairColor,
+        trunksColor = boxer.trunksColor,
+        gloveColor = boxer.gloveColor,
         isGuarding = boxer.isGuarding,
         isDodging = boxer.isDodging,
         isKnockedDown = boxer.isKnockedDown,

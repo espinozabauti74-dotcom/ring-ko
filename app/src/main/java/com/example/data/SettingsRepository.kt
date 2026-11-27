@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.model.BoxerAppearance
 import com.example.model.GloveItem
 import com.example.model.PlayerEconomy
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,10 @@ class SettingsRepository(private val context: Context) {
         val OWNED_GLOVES = stringSetPreferencesKey("owned_glove_ids")
         val EQUIPPED_GLOVE = stringPreferencesKey("equipped_glove_id")
         val PLAYER_NAME = stringPreferencesKey("player_name")
+        val SKIN_PRESET_ID = stringPreferencesKey("skin_preset_id")
+        val SKIN_TONE_IDX = intPreferencesKey("skin_tone_idx")
+        val HAIR_COLOR_IDX = intPreferencesKey("hair_color_idx")
+        val TRUNKS_COLOR_IDX = intPreferencesKey("trunks_color_idx")
     }
 
     val settingsFlow: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -47,6 +52,15 @@ class SettingsRepository(private val context: Context) {
             coins = prefs[Keys.COINS] ?: 200,
             ownedGloveIds = owned,
             equippedGloveId = equipped
+        )
+    }
+
+    val appearanceFlow: Flow<BoxerAppearance> = context.dataStore.data.map { prefs ->
+        BoxerAppearance(
+            presetId = prefs[Keys.SKIN_PRESET_ID] ?: "arcade_classic",
+            skinToneIndex = prefs[Keys.SKIN_TONE_IDX] ?: 1,
+            hairColorIndex = prefs[Keys.HAIR_COLOR_IDX] ?: 1,
+            trunksColorIndex = prefs[Keys.TRUNKS_COLOR_IDX] ?: 0
         )
     }
 
@@ -93,5 +107,14 @@ class SettingsRepository(private val context: Context) {
             }
         }
         return success
+    }
+
+    suspend fun saveAppearance(appearance: BoxerAppearance) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.SKIN_PRESET_ID] = appearance.presetId
+            prefs[Keys.SKIN_TONE_IDX] = appearance.skinToneIndex
+            prefs[Keys.HAIR_COLOR_IDX] = appearance.hairColorIndex
+            prefs[Keys.TRUNKS_COLOR_IDX] = appearance.trunksColorIndex
+        }
     }
 }

@@ -170,19 +170,19 @@ object FighterRoster {
             name = "Benja Rodríguez",
             nickname = "El Black",
             weightClass = "Peso Wélter • 67 kg",
-            difficultyLabel = "NORMAL",
-            speedStat = 6,
-            powerStat = 8,
-            guardStat = 6,
-            styleDescription = "Lanza ganchos demoledores con sus guantes negros. Muévete lateralmente para sacarlo de balance.",
-            introLine = "¡Pegada fulminante con guantes negros desde la esquina azul!",
-            rewardCoins = 220,
-            maxHp = 140f,
-            telegraphMs = 640L,
-            aiIntervalMinMs = 1120L,
-            aiIntervalMaxMs = 1800L,
-            counterChance = 0.22f,
-            guardChance = 0.30f,
+            difficultyLabel = "CAMPEÓN",
+            speedStat = 8,
+            powerStat = 10,
+            guardStat = 8,
+            styleDescription = "Campeón implacable de guantes negros. Encadena ganchos devastadores con ritmo de campeonato.",
+            introLine = "¡El campeón de los guantes negros entra al ring por el título!",
+            rewardCoins = 460,
+            maxHp = 195f,
+            telegraphMs = 470L,
+            aiIntervalMinMs = 800L,
+            aiIntervalMaxMs = 1360L,
+            counterChance = 0.42f,
+            guardChance = 0.46f,
             trunksColor = Color(0xFF18181B),
             gloveColor = Color(0xFF141418),
             accentColor = Color(0xFFD4D4D8),
@@ -244,20 +244,20 @@ object FighterRoster {
             id = "diego",
             name = "Bautista Espinoza",
             nickname = "El Flaquito",
-            weightClass = "Campeón Absoluto • 79 kg",
-            difficultyLabel = "CAMPEÓN",
-            speedStat = 9,
+            weightClass = "Leyenda Absoluta • 79 kg",
+            difficultyLabel = "LEYENDA",
+            speedStat = 10,
             powerStat = 10,
-            guardStat = 9,
-            styleDescription = "Campeón invicto. Encadena ráfagas de golpes en los 10 rounds.",
-            introLine = "¡El campeón indiscutido defiende su corona hoy!",
-            rewardCoins = 480,
-            maxHp = 195f,
-            telegraphMs = 470L,
-            aiIntervalMinMs = 780L,
-            aiIntervalMaxMs = 1360L,
-            counterChance = 0.44f,
-            guardChance = 0.48f,
+            guardStat = 10,
+            styleDescription = "Leyenda invicta del ring. Velocidad máxima, reflejos letales y combos imparables durante los 10 rounds.",
+            introLine = "¡La leyenda indiscutida sube al ring a defender su trono!",
+            rewardCoins = 600,
+            maxHp = 230f,
+            telegraphMs = 410L,
+            aiIntervalMinMs = 690L,
+            aiIntervalMaxMs = 1220L,
+            counterChance = 0.50f,
+            guardChance = 0.54f,
             trunksColor = Color(0xFF18181B),
             gloveColor = Color(0xFFFFB800),
             accentColor = Color(0xFFFFD147),
@@ -440,3 +440,113 @@ data class SessionRecord(
     val currentStreak: Int = 0,
     val defeatedIds: Set<String> = emptySet()
 )
+
+data class BoxerSkinOption(
+    val name: String,
+    val color: Color
+)
+
+data class BoxerSkinPreset(
+    val id: String,
+    val name: String,
+    val subtitle: String,
+    val skinToneIndex: Int,
+    val hairColorIndex: Int,
+    val trunksColorIndex: Int
+)
+
+data class BoxerAppearance(
+    val presetId: String = "arcade_classic",
+    val skinToneIndex: Int = 1,
+    val hairColorIndex: Int = 1,
+    val trunksColorIndex: Int = 0
+) {
+    fun resolvedSkinColor(): Color =
+        BoxerSkinCatalog.skinTones[skinToneIndex.coerceIn(0, BoxerSkinCatalog.skinTones.lastIndex)].color
+
+    fun resolvedHairColor(): Color =
+        BoxerSkinCatalog.hairColors[hairColorIndex.coerceIn(0, BoxerSkinCatalog.hairColors.lastIndex)].color
+
+    fun resolvedTrunksColor(): Color =
+        BoxerSkinCatalog.trunksColors[trunksColorIndex.coerceIn(0, BoxerSkinCatalog.trunksColors.lastIndex)].color
+}
+
+object BoxerSkinCatalog {
+    val skinTones: List<BoxerSkinOption> = listOf(
+        BoxerSkinOption("Claro", Color(0xFFEAC09E)),
+        BoxerSkinOption("Trigueño", Color(0xFFC47A4C)),
+        BoxerSkinOption("Bronceado", Color(0xFFD69E76)),
+        BoxerSkinOption("Canela", Color(0xFF9F5E38)),
+        BoxerSkinOption("Oscuro", Color(0xFF693B21))
+    )
+
+    val hairColors: List<BoxerSkinOption> = listOf(
+        BoxerSkinOption("Negro", Color(0xFF141418)),
+        BoxerSkinOption("Castaño", Color(0xFF4A2C1D)),
+        BoxerSkinOption("Rubio", Color(0xFFE2B44B)),
+        BoxerSkinOption("Platino", Color(0xFFDCE2EE)),
+        BoxerSkinOption("Rojo", Color(0xFFC83232)),
+        BoxerSkinOption("Azul Neón", Color(0xFF2563EB))
+    )
+
+    val trunksColors: List<BoxerSkinOption> = listOf(
+        BoxerSkinOption("Rojo Arena", Color(0xFFD62828)),
+        BoxerSkinOption("Negro", Color(0xFF1E1E24)),
+        BoxerSkinOption("Azul Rey", Color(0xFF1D4ED8)),
+        BoxerSkinOption("Oro Leyenda", Color(0xFFD99B00)),
+        BoxerSkinOption("Esmeralda", Color(0xFF047857)),
+        BoxerSkinOption("Púrpura", Color(0xFF6D28D9))
+    )
+
+    val presets: List<BoxerSkinPreset> = listOf(
+        BoxerSkinPreset(
+            id = "arcade_classic",
+            name = "Arcade Clásico",
+            subtitle = "Estilo original del ring",
+            skinToneIndex = 1,
+            hairColorIndex = 1,
+            trunksColorIndex = 0
+        ),
+        BoxerSkinPreset(
+            id = "el_black",
+            name = "Sombra Negra",
+            subtitle = "Cinturón oscuro de campeón",
+            skinToneIndex = 3,
+            hairColorIndex = 0,
+            trunksColorIndex = 1
+        ),
+        BoxerSkinPreset(
+            id = "relampago_azul",
+            name = "Relámpago Azul",
+            subtitle = "Esquina azul eléctrica",
+            skinToneIndex = 2,
+            hairColorIndex = 0,
+            trunksColorIndex = 2
+        ),
+        BoxerSkinPreset(
+            id = "leyenda_dorada",
+            name = "Leyenda Dorada",
+            subtitle = "Aura dorada de campeón",
+            skinToneIndex = 0,
+            hairColorIndex = 2,
+            trunksColorIndex = 3
+        ),
+        BoxerSkinPreset(
+            id = "furia_esmeralda",
+            name = "Furia Verde",
+            subtitle = "Estilo rápido esmeralda",
+            skinToneIndex = 2,
+            hairColorIndex = 1,
+            trunksColorIndex = 4
+        ),
+        BoxerSkinPreset(
+            id = "titan_purpura",
+            name = "Titán Púrpura",
+            subtitle = "Platino y púrpura real",
+            skinToneIndex = 4,
+            hairColorIndex = 3,
+            trunksColorIndex = 5
+        )
+    )
+}
+

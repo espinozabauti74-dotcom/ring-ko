@@ -1,13 +1,17 @@
 package com.example.game
 
 import android.app.Application
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.BoxingSoundEngine
 import com.example.data.SettingsRepository
+import com.example.model.BoxerAppearance
 import com.example.model.CalloutTone
 import com.example.model.FightPhase
 import com.example.model.FloatingCallout
+import com.example.model.GloveItem
+import com.example.model.GloveShopCatalog
 import com.example.model.ImpactSpark
 import com.example.model.PunchType
 import kotlinx.coroutines.Job
@@ -40,7 +44,11 @@ data class VersusBoxerState(
     val roundPoints: Int = 0,
     val punchesLanded: Int = 0,
     val knockdownsScored: Int = 0,
-    val isKnockedDown: Boolean = false
+    val isKnockedDown: Boolean = false,
+    val skinColor: Color = Color(0xFFC47A4C),
+    val hairColor: Color = Color(0xFF4A2C1D),
+    val trunksColor: Color = Color(0xFFD62828),
+    val gloveColor: Color = Color(0xFFE63946)
 )
 
 data class VersusUiState(
@@ -98,7 +106,13 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun startVersusMatch(p1Name: String, p2Name: String = "Jugador 2", maxRounds: Int = 3) {
+    fun startVersusMatch(
+        p1Name: String,
+        p2Name: String = "Jugador 2",
+        maxRounds: Int = 3,
+        p1Appearance: BoxerAppearance = BoxerAppearance(),
+        p1Glove: GloveItem = GloveShopCatalog.gloves.first()
+    ) {
         loopJob?.cancel()
         p1MoveX = 0f
         p2MoveX = 0f
@@ -125,8 +139,24 @@ class VersusViewModel(application: Application) : AndroidViewModel(application) 
             round = 1,
             maxRounds = maxRounds,
             roundTimeMs = 45_000L,
-            p1 = VersusBoxerState(playerIndex = 1, name = cleanP1, posX = -0.35f),
-            p2 = VersusBoxerState(playerIndex = 2, name = cleanP2, posX = 0.35f),
+            p1 = VersusBoxerState(
+                playerIndex = 1,
+                name = cleanP1,
+                posX = -0.35f,
+                skinColor = p1Appearance.resolvedSkinColor(),
+                hairColor = p1Appearance.resolvedHairColor(),
+                trunksColor = p1Appearance.resolvedTrunksColor(),
+                gloveColor = p1Glove.primaryColor
+            ),
+            p2 = VersusBoxerState(
+                playerIndex = 2,
+                name = cleanP2,
+                posX = 0.35f,
+                skinColor = Color(0xFFD69E76),
+                hairColor = Color(0xFF1D1B24),
+                trunksColor = Color(0xFF1D4ED8),
+                gloveColor = Color(0xFF3B82F6)
+            ),
             crowdExcitement = 0.70f
         )
         soundEngine.playPresentationFanfare()

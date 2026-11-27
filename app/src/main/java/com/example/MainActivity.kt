@@ -59,12 +59,14 @@ object AppRoutes {
     const val FIGHT = "fight/{fighterId}"
     const val VERSUS = "versus/{p2Name}/{rounds}"
     const val ONLINE_FIGHT = "online/{matchId}"
-    const val WIFI_FIGHT = "wifi/{role}/{hostIp}/{port}/{rounds}"
+    const val WIFI_FIGHT = "wifi/{role}/{hostIp}/{port}/{rounds}/{charId}"
     fun fightRoute(fighterId: String): String = "fight/$fighterId"
     fun versusRoute(p2Name: String, rounds: Int): String = "versus/${Uri.encode(p2Name)}/$rounds"
     fun onlineFightRoute(matchId: String): String = "online/${Uri.encode(matchId)}"
-    fun wifiHostRoute(rounds: Int): String = "wifi/host/none/$WIFI_DEFAULT_PORT/$rounds"
-    fun wifiGuestRoute(hostIp: String, port: Int): String = "wifi/guest/${Uri.encode(hostIp)}/$port/3"
+    fun wifiHostRoute(rounds: Int, charId: String): String =
+        "wifi/host/none/$WIFI_DEFAULT_PORT/$rounds/${Uri.encode(charId)}"
+    fun wifiGuestRoute(hostIp: String, port: Int, charId: String): String =
+        "wifi/guest/${Uri.encode(hostIp)}/$port/3/${Uri.encode(charId)}"
 }
 
 class MainActivity : ComponentActivity() {
@@ -115,6 +117,7 @@ fun RingKoApp(
     val sessionRecord by fightViewModel.sessionRecord.collectAsStateWithLifecycle()
     val economy by fightViewModel.economy.collectAsStateWithLifecycle()
     val settings by fightViewModel.settings.collectAsStateWithLifecycle()
+    val appearance by fightViewModel.appearance.collectAsStateWithLifecycle()
     val fightState by fightViewModel.uiState.collectAsStateWithLifecycle()
     val versusState by versusViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -128,6 +131,7 @@ fun RingKoApp(
                 sessionRecord = sessionRecord,
                 economy = economy,
                 settings = settings,
+                appearance = appearance,
                 onAuthSuccess = { currentUser = auth.currentUser },
                 onStartFight = { fighterId ->
                     navController.navigate(AppRoutes.fightRoute(fighterId)) {
@@ -144,17 +148,18 @@ fun RingKoApp(
                         launchSingleTop = true
                     }
                 },
-                onHostWifiMatch = { rounds ->
-                    navController.navigate(AppRoutes.wifiHostRoute(rounds)) {
+                onHostWifiMatch = { rounds, charId ->
+                    navController.navigate(AppRoutes.wifiHostRoute(rounds, charId)) {
                         launchSingleTop = true
                     }
                 },
-                onJoinWifiMatch = { hostIp, port ->
-                    navController.navigate(AppRoutes.wifiGuestRoute(hostIp, port)) {
+                onJoinWifiMatch = { hostIp, port, charId ->
+                    navController.navigate(AppRoutes.wifiGuestRoute(hostIp, port, charId)) {
                         launchSingleTop = true
                     }
                 },
                 onBuyOrEquipGlove = fightViewModel::buyOrEquipGlove,
+                onUpdateAppearance = fightViewModel::updateAppearance,
                 onSavePlayerName = fightViewModel::setPlayerName,
                 onToggleSound = fightViewModel::setSoundEnabled,
                 onToggleHaptics = fightViewModel::setHapticsEnabled
@@ -200,8 +205,14 @@ fun RingKoApp(
             val rounds = backStackEntry.arguments?.getInt("rounds") ?: 3
             val p1Name = settings.playerName
 
-            LaunchedEffect(p2Name, rounds) {
-                versusViewModel.startVersusMatch(p1Name = p1Name, p2Name = p2Name, maxRounds = rounds)
+            LaunchedEffect(p2Name, rounds, appearance, economy.equippedGlove) {
+                versusViewModel.startVersusMatch(
+                    p1Name = p1Name,
+                    p2Name = p2Name,
+                    maxRounds = rounds,
+                    p1Appearance = appearance,
+                    p1Glove = economy.equippedGlove
+                )
             }
 
             VersusScreen(
@@ -212,7 +223,15 @@ fun RingKoApp(
                 onThrowPunch = versusViewModel::throwPunch,
                 onSkipPresentation = versusViewModel::skipPresentation,
                 onTogglePause = versusViewModel::togglePause,
-                onRematch = { versusViewModel.startVersusMatch(p1Name = p1Name, p2Name = p2Name, maxRounds = rounds) },
+                onRematch = {
+                    versusViewModel.startVersusMatch(
+                        p1Name = p1Name,
+                        p2Name = p2Name,
+                        maxRounds = rounds,
+                        p1Appearance = appearance,
+                        p1Glove = economy.equippedGlove
+                    )
+                },
                 onExit = {
                     versusViewModel.stopMatch()
                     navController.popBackStack()
@@ -289,13 +308,15 @@ fun RingKoApp(
                 navArgument("role") { type = NavType.StringType },
                 navArgument("hostIp") { type = NavType.StringType },
                 navArgument("port") { type = NavType.IntType },
-                navArgument("rounds") { type = NavType.IntType }
+                navArgument("rounds") { type = NavType.IntType },
+                navArgument("charId") { type = NavType.StringType }
             )
         ) { backStackEntry ->
             val role = backStackEntry.arguments?.getString("role") ?: "host"
             val hostIp = backStackEntry.arguments?.getString("hostIp") ?: "none"
             val port = backStackEntry.arguments?.getInt("port") ?: WIFI_DEFAULT_PORT
             val rounds = backStackEntry.arguments?.getInt("rounds") ?: 3
+            val charId = backStackEntry.arguments?.getString("charId") ?: "custom"
 
             val wifiFightViewModel: WifiFightViewModel = viewModel(
                 factory = viewModelFactory {
@@ -313,19 +334,23 @@ fun RingKoApp(
                 }
             )
 
-            LaunchedEffect(role, hostIp, port, rounds, settings.playerName, economy.equippedGloveId) {
+            LaunchedEffect(role, hostIp, port, rounds, charId, settings.playerName, economy.equippedGloveId, appearance) {
                 if (role == "host") {
                     wifiFightViewModel.startHost(
                         myName = settings.playerName,
                         myGloveId = economy.equippedGloveId,
-                        rounds = rounds
+                        rounds = rounds,
+                        characterId = charId,
+                        appearance = appearance
                     )
                 } else {
                     wifiFightViewModel.startGuest(
                         hostIp = hostIp,
                         port = port,
                         myName = settings.playerName,
-                        myGloveId = economy.equippedGloveId
+                        myGloveId = economy.equippedGloveId,
+                        characterId = charId,
+                        appearance = appearance
                     )
                 }
             }

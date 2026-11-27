@@ -41,6 +41,17 @@ data class DiscoveredWifiRoom(
     val rounds: Int
 )
 
+data class WifiPeerProfile(
+    val name: String,
+    val gloveId: String,
+    val characterId: String = "custom",
+    val skinArgb: Int = 0xFFC47A4C.toInt(),
+    val hairArgb: Int = 0xFF4A2C1D.toInt(),
+    val trunksArgb: Int = 0xFF1D4ED8.toInt(),
+    val gloveArgb: Int = 0xFFE63946.toInt(),
+    val trimArgb: Int = 0xFFF8FAFC.toInt()
+)
+
 fun getLocalIpv4Addresses(): List<String> {
     val preferred = mutableListOf<String>()
     val secondary = mutableListOf<String>()
@@ -257,11 +268,10 @@ class WifiMatchTransport(
     private var closed = false
 
     fun startHost(
-        hostName: String,
-        hostGloveId: String,
+        localProfile: WifiPeerProfile,
         rounds: Int,
         onWaiting: (ips: List<String>, port: Int) -> Unit,
-        onConnected: (oppName: String, oppGloveId: String) -> Unit,
+        onConnected: (oppProfile: WifiPeerProfile) -> Unit,
         onPacket: (JSONObject) -> Unit,
         onError: (String) -> Unit,
         onDisconnected: () -> Unit
@@ -279,7 +289,7 @@ class WifiMatchTransport(
                 serverSocket = server
                 val boundPort = server.localPort
 
-                registerNsdService(hostName, rounds, boundPort)
+                registerNsdService(localProfile.name, rounds, boundPort)
                 val ips = getLocalIpv4Addresses()
                 withContext(Dispatchers.Main) {
                     onWaiting(ips, boundPort)
@@ -304,20 +314,34 @@ class WifiMatchTransport(
                 val firstLine = reader.readLine()
                     ?: throw IllegalStateException("El rival cerró la conexión antes de iniciar.")
                 val hello = JSONObject(firstLine)
-                val oppName = hello.optString("name", "Retador").take(18).ifBlank { "Retador" }
-                val oppGloveId = hello.optString("gloveId", "cobalt_flash")
+                val oppProfile = WifiPeerProfile(
+                    name = hello.optString("name", "Retador").take(26).ifBlank { "Retador" },
+                    gloveId = hello.optString("gloveId", "cobalt_flash"),
+                    characterId = hello.optString("characterId", "custom"),
+                    skinArgb = hello.optInt("skinArgb", 0xFFC47A4C.toInt()),
+                    hairArgb = hello.optInt("hairArgb", 0xFF4A2C1D.toInt()),
+                    trunksArgb = hello.optInt("trunksArgb", 0xFF1D4ED8.toInt()),
+                    gloveArgb = hello.optInt("gloveArgb", 0xFF2563EB.toInt()),
+                    trimArgb = hello.optInt("trimArgb", 0xFF93C5FD.toInt())
+                )
 
                 sendJson(
                     JSONObject().apply {
                         put("type", "WELCOME")
-                        put("name", hostName)
-                        put("gloveId", hostGloveId)
+                        put("name", localProfile.name)
+                        put("gloveId", localProfile.gloveId)
+                        put("characterId", localProfile.characterId)
+                        put("skinArgb", localProfile.skinArgb)
+                        put("hairArgb", localProfile.hairArgb)
+                        put("trunksArgb", localProfile.trunksArgb)
+                        put("gloveArgb", localProfile.gloveArgb)
+                        put("trimArgb", localProfile.trimArgb)
                         put("rounds", rounds)
                     }
                 )
 
                 withContext(Dispatchers.Main) {
-                    onConnected(oppName, oppGloveId)
+                    onConnected(oppProfile)
                 }
 
                 readLoop(reader, onPacket, onDisconnected)
@@ -337,9 +361,8 @@ class WifiMatchTransport(
     fun startGuest(
         hostIp: String,
         port: Int,
-        guestName: String,
-        guestGloveId: String,
-        onConnected: (oppName: String, oppGloveId: String, rounds: Int) -> Unit,
+        localProfile: WifiPeerProfile,
+        onConnected: (oppProfile: WifiPeerProfile, rounds: Int) -> Unit,
         onPacket: (JSONObject) -> Unit,
         onError: (String) -> Unit,
         onDisconnected: () -> Unit
@@ -362,20 +385,34 @@ class WifiMatchTransport(
                 sendJson(
                     JSONObject().apply {
                         put("type", "HELLO")
-                        put("name", guestName)
-                        put("gloveId", guestGloveId)
+                        put("name", localProfile.name)
+                        put("gloveId", localProfile.gloveId)
+                        put("characterId", localProfile.characterId)
+                        put("skinArgb", localProfile.skinArgb)
+                        put("hairArgb", localProfile.hairArgb)
+                        put("trunksArgb", localProfile.trunksArgb)
+                        put("gloveArgb", localProfile.gloveArgb)
+                        put("trimArgb", localProfile.trimArgb)
                     }
                 )
 
                 val firstLine = reader.readLine()
                     ?: throw IllegalStateException("No hubo respuesta del anfitrión.")
                 val welcome = JSONObject(firstLine)
-                val oppName = welcome.optString("name", "Anfitrión").take(18).ifBlank { "Anfitrión" }
-                val oppGloveId = welcome.optString("gloveId", "classic_red")
+                val oppProfile = WifiPeerProfile(
+                    name = welcome.optString("name", "Anfitrión").take(26).ifBlank { "Anfitrión" },
+                    gloveId = welcome.optString("gloveId", "classic_red"),
+                    characterId = welcome.optString("characterId", "custom"),
+                    skinArgb = welcome.optInt("skinArgb", 0xFFC47A4C.toInt()),
+                    hairArgb = welcome.optInt("hairArgb", 0xFF4A2C1D.toInt()),
+                    trunksArgb = welcome.optInt("trunksArgb", 0xFFD62828.toInt()),
+                    gloveArgb = welcome.optInt("gloveArgb", 0xFFE63946.toInt()),
+                    trimArgb = welcome.optInt("trimArgb", 0xFFF8FAFC.toInt())
+                )
                 val rounds = if (welcome.optInt("rounds", 3) == 10) 10 else 3
 
                 withContext(Dispatchers.Main) {
-                    onConnected(oppName, oppGloveId, rounds)
+                    onConnected(oppProfile, rounds)
                 }
 
                 readLoop(reader, onPacket, onDisconnected)
